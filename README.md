@@ -1,102 +1,177 @@
-# Turborepo starter
+# Documentazione Completa del Progetto OpenHostMC
 
-This Turborepo starter is maintained by the Turborepo core team.
+## Indice
+1. [Descrizione del Progetto](#descrizione-del-progetto)
+2. [Tecnologie Utilizzate](#tecnologie-utilizzate)
+3. [Struttura del Progetto](#struttura-del-progetto)
+4. [Requisiti di Sistema](#requisiti-di-sistema)
+5. [Installazione](#installazione)
+6. [Configurazione](#configurazione)
+7. [Avvio del Progetto](#avvio-del-progetto)
+8. [Utilizzo](#utilizzo)
+9. [API](#api)
+10. [Problemi Noti](#problemi-noti)
+11. [Contributi](#contributi)
+12. [Licenza](#licenza)
 
-## Using this example
+## Descrizione del Progetto
+OpenHostMC è un progetto monorepo basato su Turborepo che include diverse applicazioni e pacchetti per la gestione di un sistema di hosting. Il progetto è strutturato per essere modulare e scalabile, utilizzando tecnologie moderne per garantire prestazioni elevate e facilità di manutenzione.
 
-Run the following command:
+## Tecnologie Utilizzate
+Il progetto utilizza le seguenti tecnologie principali:
 
-```sh
-npx create-turbo@latest
+- **Frontend**:
+  - Next.js
+  - React
+  - TypeScript
+  - Tailwind CSS
+
+- **Backend**:
+  - NestJS
+  - TypeScript
+  - Prisma (ORM)
+
+- **Database**:
+  - PostgreSQL
+
+- **DevOps e Strumenti**:
+  - Turborepo
+  - Docker
+  - ESLint
+  - Prettier
+
+## Problemi Noti
+Alcuni problemi noti includono:
+
+- **Configurazione del Database**: Assicurarsi che il database PostgreSQL sia correttamente configurato e accessibile.
+- **Variabili d'Ambiente**: Verificare che tutte le variabili d'ambiente siano impostate correttamente prima di avviare il progetto.
+- **Dipendenze**: Alcune dipendenze potrebbero richiedere versioni specifiche di Node.js o npm.
+
+## Struttura del Progetto
+Il progetto è organizzato come segue:
+
+```
+openhostmc-monorepo/
+├── apps/
+│   ├── docs/                  # Documentazione del progetto
+│   ├── frontend/              # Applicazione frontend principale
+│   ├── orchestrator-service/  # Servizio di orchestrazione basato su NestJS
+│   ├── server-service/        # Servizio di gestione server
+│   └── web/                   # Applicazione web aggiuntiva
+├── packages/
+│   ├── database/              # Configurazione e gestione del database
+│   ├── eslint-config/          # Configurazione ESLint
+│   ├── typescript-config/     # Configurazione TypeScript
+│   └── ui/                    # Libreria di componenti UI condivisi
+├── docker-compose.yaml        # Configurazione Docker
+├── package.json               # Configurazione principale del progetto
+├── prisma.config.ts           # Configurazione Prisma
+└── turbo.json                 # Configurazione Turborepo
 ```
 
-## What's inside?
+## Requisiti di Sistema
+- Node.js >= 18
+- npm >= 11.12.1
+- Docker (opzionale, per l'ambiente di sviluppo)
 
-This Turborepo includes the following packages/apps:
+## Installazione
+1. Clona il repository:
+   ```bash
+   git clone https://github.com/Rockroky/OpenHostMC.git
+   cd OPENHOSTMC/openhostmc-monorepo
+   ```
 
-### Apps and Packages
+2. Installa le dipendenze:
+   ```bash
+   npm install
+   ```
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+3. Configura il database (se necessario):
+   ```bash
+   npm run db:migrate
+   ```
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## Configurazione
+### Variabili d'Ambiente
+Assicurati di configurare le variabili d'ambiente necessarie per ogni applicazione. Esempio per il servizio di orchestrazione:
 
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/dbname"
+JWT_SECRET="your_jwt_secret"
 ```
 
-Without global `turbo`, use your package manager:
+### Docker
+Se desideri utilizzare Docker per l'ambiente di sviluppo, puoi avviare i servizi con:
 
-```sh
-cd my-turborepo
-npx turbo build
-npm dlx turbo build
-npm exec turbo build
+```bash
+docker-compose up -d
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+## Avvio del Progetto
+### Modalità di Sviluppo
+Per avviare tutte le applicazioni in modalità di sviluppo:
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
+```bash
+npm run dev
 ```
 
-Without global `turbo`:
+### Modalità di Produzione
+Per costruire e avviare le applicazioni in modalità di produzione:
 
-```sh
-npx turbo build --filter=docs
-npm exec turbo build --filter=docs
-npm exec turbo build --filter=docs
+```bash
+npm run build
+npm start
 ```
 
-### Develop
+## Utilizzo
+### Frontend
+L'applicazione frontend è accessibile all'indirizzo:
 
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
+```
+http://localhost:3000
 ```
 
-Without global `turbo`, use your package manager:
+### Backend
+Il servizio di orchestrazione è accessibile all'indirizzo:
 
-```sh
-cd my-turborepo
-npx turbo dev
-npm exec turbo dev
-npm exec turbo dev
+```
+http://localhost:3001
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+## API
+Il progetto espone diverse API per interagire con i servizi. Di seguito sono riportate alcune delle principali:
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+### Autenticazione
+- **POST** `/auth/login`: Effettua il login e ottieni un token JWT.
+- **POST** `/auth/register`: Registra un nuovo utente.
 
-```sh
-turbo dev --filter=web
-```
+### Gestione Server
+- **GET** `/servers`: Ottieni la lista dei server.
+- **POST** `/servers`: Crea un nuovo server.
+- **GET** `/servers/{id}`: Ottieni i dettagli di un server specifico.
+- **PUT** `/servers/{id}`: Aggiorna un server.
+- **DELETE** `/servers/{id}`: Elimina un server.
 
-Without global `turbo`:
+## Contributi
+Se desideri contribuire al progetto, segui questi passaggi:
+
+1. Forka il repository.
+2. Crea un branch per la tua feature o fix:
+   ```bash
+   git checkout -b feature/nome-feature
+   ```
+3. Fai commit delle tue modifiche:
+   ```bash
+   git commit -m "Aggiunta nuova feature"
+   ```
+4. Push del branch:
+   ```bash
+   git push origin feature/nome-feature
+   ```
+5. Apri una Pull Request.
+
+## Licenza
+Questo progetto è distribuito sotto la licenza MIT. Consulta il file `LICENSE` per ulteriori dettagli.
 
 ```sh
 npx turbo dev --filter=web

@@ -1,0 +1,137 @@
+// This schema is kept for compatibility but the actual schema is in apps/orchestrator-service/prisma/
+// Re-export the full schema content here to ensure Prisma client generation works correctly
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Plan {
+  id                     String     @id @default(uuid())
+  name                   String     @unique
+  max_servers            Int
+  ram_mb                 Int
+  cpu_cores              Float
+  storage_gb             Int
+  max_players            Int
+  daily_uptime_hours     Int
+  backup_max_stored      Int
+  backup_frequency_hours Int
+  queue_enabled          Boolean    @default(true)
+  created_at             DateTime   @default(now())
+  servers                McServer[]
+  users                  User[]
+}
+
+model User {
+  id            String     @id @default(uuid())
+  email         String     @unique
+  username      String     @unique
+  password_hash String
+  role          UserRole   @default(USER)
+  verified      Boolean    @default(false)
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+  plan_id       String?
+  servers       McServer[]
+  plan          Plan?      @relation(fields: [plan_id], references: [id])
+}
+
+model PortPool {
+  port         Int       @id
+  server_id    String?   @unique
+  allocated_at DateTime?
+  released_at  DateTime?
+  server       McServer? @relation(fields: [server_id], references: [id])
+
+  @@index([port])
+}
+
+model McServer {
+  id                   String          @id @default(uuid())
+  name                 String
+  subdomain            String          @unique
+  mc_type              McType
+  mc_version           String
+  status               ServerStatus    @default(CREATED)
+  port                 Int?            @unique
+  rcon_port            Int?
+  rcon_password        String?
+  container_id         String?
+  owner_id             String
+  plan_id              String
+  motd                 String?         @default("A Minecraft Server")
+  icon_url             String?
+  is_public            Boolean         @default(false)
+  queue_position       Int?
+  last_started_at      DateTime?
+  last_stopped_at      DateTime?
+  today_uptime_seconds Int             @default(0)
+  total_uptime_seconds BigInt          @default(0)
+  created_at           DateTime        @default(now())
+  updated_at           DateTime        @updatedAt
+  owner                User            @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  plan                 Plan            @relation(fields: [plan_id], references: [id])
+  portAllocation       PortPool?
+  settings             ServerSetting[]
+
+  @@unique([owner_id, name])
+  @@index([status])
+  @@index([subdomain])
+}
+
+model ServerSetting {
+  id         String          @id @default(uuid())
+  key        String
+  value      String
+  category   SettingCategory @default(gameplay)
+  updated_at DateTime        @default(now()) @updatedAt
+  server_id  String
+  server     McServer        @relation(fields: [server_id], references: [id], onDelete: Cascade)
+
+  @@unique([server_id, key])
+  @@index([server_id, category])
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPERADMIN
+}
+
+enum McType {
+  VANILLA
+  PAPER
+  SPIGOT
+  FORGE
+  NEOFORGE
+  FABRIC
+  QUILT
+  MAGMA
+  MOHIST
+  BEDROCK
+}
+
+enum ServerStatus {
+  CREATED
+  STARTING
+  RUNNING
+  STOPPING
+  STOPPED
+  ERROR
+  CRASHED
+  QUEUED
+}
+
+enum SettingCategory {
+  world
+  gameplay
+  performance
+  network
+  security
+  advanced
+}

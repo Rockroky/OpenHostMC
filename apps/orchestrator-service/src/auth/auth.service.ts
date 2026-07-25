@@ -1,0 +1,183 @@
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+import { PrismaService } from '../prisma.service';
+import { UserRole } from '@prisma/client';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+  ) {}
+
+  async validateUser(email: string, password: string) {
+    // Check for SuperAdmin (Hardcoded from ENV)
+    const superAdminEmail = process.env.SUPERADMIN_EMAIL;
+    const superAdminPassword = process.env.SUPERADMIN_PASSWORD;
+
+    if (superAdminEmail && superAdminPassword && email === superAdminEmail && password === superAdminPassword) {
+      // Ensure a default plan exists
+      let defaultPlan = await this.prisma.plan.findFirst({ where: { name: 'Free' } });
+      if (!defaultPlan) {
+        defaultPlan = await this.prisma.plan.create({
+          data: {
+            name: 'Free',
+            max_servers: 5,
+            ram_mb: 2048,
+            cpu_cores: 2.0,
+            storage_gb: 10,
+            max_players: 20,
+            daily_uptime_hours: 24,
+            backup_max_stored: 5,
+            backup_frequency_hours: 24,
+            queue_enabled: false,
+          },
+        });
+      }
+
+      // Find or create superadmin in DB
+      const superAdmin = await this.prisma.user.upsert({
+        where: { email: superAdminEmail },
+        update: {
+          role: UserRole.SUPERADMIN,
+          verified: true,
+          plan_id: defaultPlan.id,
+        },
+        create: {
+          email: superAdminEmail,
+          username: 'SuperAdmin',
+          password_hash: await bcrypt.hash(superAdminPassword, 12),
+          role: UserRole.SUPERADMIN,
+          verified: true,
+          plan_id: defaultPlan.id,
+        },
+        include: { plan: true },
+      });
+      
+      const { password_hash: _, ...result } = superAdmin;
+      return { ...result, requiresPasswordChange: false, planId: superAdmin.plan_id };
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { plan: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Check if password change is required (first login)
+    const requiresPasswordChange = user.password_hash === '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.VTtYA.qGZvKG6';
+
+    const { password_hash: _, ...result } = user;
+    return { ...result, requiresPasswordChange, planId: user.plan_id };
+  }
+
+  async login(user: any) {
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      planId: user.plan_id || user.planId || null,
+      username: user.username,
+    };
+
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        planId: user.plan_id || user.planId || null,
+        plan: user.plan,
+        requiresPasswordChange: user.requiresPasswordChange,
+      },
+    };
+  }
+
+  async register(email: string, username: string, password: string) {
+    // Check if user already exists
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ email }, { username }],
+      },
+    });
+
+    if (existingUser) {
+      throw new UnauthorizedException('User already exists');
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Get or create default free tier plan
+    let defaultPlan = await this.prisma.plan.findFirst({
+      where: { name: 'Free' },
+    });
+
+    if (!defaultPlan) {
+      defaultPlan = await this.prisma.plan.create({
+        data: {
+          name: 'Free',
+          max_servers: 1,
+          ram_mb: 2048,
+          cpu_cores: 1.0,
+          storage_gb: 5,
+          max_players: 10,
+          daily_uptime_hours: 12,
+          backup_max_stored: 1,
+          backup_frequency_hours: 24,
+          queue_enabled: true,
+        },
+      });
+    }
+
+    // Create user
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        username,
+        password_hash: hashedPassword,
+        role: 'USER',
+        verified: false,
+        plan_id: defaultPlan.id,
+      },
+      include: { plan: true },
+    });
+
+    const { password_hash: _, ...result } = user;
+    return this.login({ ...result, planId: result.plan_id });
+  }
+
+  async changePassword(userId: string, oldPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.password_hash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid old password');
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password_hash: hashedNewPassword },
+    });
+
+    return { success: true, message: 'Password changed successfully' };
+  }
+}

@@ -1,0 +1,1 @@
+SELECT * FROM "McServer" WHERE id = '555c690a-b770-4d6b-9100-2b4a9e6a5d4b';

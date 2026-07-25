@@ -1,234 +1,187 @@
-# Documentazione Completa del Progetto OpenHostMC
+# OpenHostMC
 
-## Indice
-1. [Descrizione del Progetto](#descrizione-del-progetto)
-2. [Tecnologie Utilizzate](#tecnologie-utilizzate)
-3. [Struttura del Progetto](#struttura-del-progetto)
-4. [Requisiti di Sistema](#requisiti-di-sistema)
-5. [Installazione](#installazione)
-6. [Configurazione](#configurazione)
-7. [Avvio del Progetto](#avvio-del-progetto)
-8. [Utilizzo](#utilizzo)
-9. [API](#api)
-10. [Problemi Noti](#problemi-noti)
-11. [Contributi](#contributi)
-12. [Licenza](#licenza)
+Piattaforma **enterprise-grade** per l'hosting di server Minecraft. Gestisci, monitora e controlla istanze Docker di Minecraft tramite un'interfaccia web moderna con console real-time, gestione mod e amministrazione multi-utente.
 
-## Descrizione del Progetto
-OpenHostMC è un progetto monorepo basato su Turborepo che include diverse applicazioni e pacchetti per la gestione di un sistema di hosting. Il progetto è strutturato per essere modulare e scalabile, utilizzando tecnologie moderne per garantire prestazioni elevate e facilità di manutenzione.
-
-## Tecnologie Utilizzate
-Il progetto utilizza le seguenti tecnologie principali:
-
-- **Frontend**:
-  - Next.js
-  - React
-  - TypeScript
-  - Tailwind CSS
-
-- **Backend**:
-  - NestJS
-  - TypeScript
-  - Prisma (ORM)
-
-- **Database**:
-  - PostgreSQL
-
-- **DevOps e Strumenti**:
-  - Turborepo
-  - Docker
-  - ESLint
-  - Prettier
-
-## Problemi Noti
-Alcuni problemi noti includono:
-
-- **Configurazione del Database**: Assicurarsi che il database PostgreSQL sia correttamente configurato e accessibile.
-- **Variabili d'Ambiente**: Verificare che tutte le variabili d'ambiente siano impostate correttamente prima di avviare il progetto.
-- **Dipendenze**: Alcune dipendenze potrebbero richiedere versioni specifiche di Node.js o npm.
-
-## Struttura del Progetto
-Il progetto è organizzato come segue:
+## Architettura
 
 ```
 openhostmc-monorepo/
 ├── apps/
-│   ├── docs/                  # Documentazione del progetto
-│   ├── frontend/              # Applicazione frontend principale
-│   ├── orchestrator-service/  # Servizio di orchestrazione basato su NestJS
-│   ├── server-service/        # Servizio di gestione server
-│   └── web/                   # Applicazione web aggiuntiva
+│   ├── frontend/              # Next.js 14 (React 18, Tailwind CSS v4)
+│   ├── orchestrator-service/  # NestJS 11 (API principale + WebSocket)
+│   └── server-service/        # Servizio NestJS secondario
 ├── packages/
-│   ├── database/              # Configurazione e gestione del database
-│   ├── eslint-config/          # Configurazione ESLint
-│   ├── typescript-config/     # Configurazione TypeScript
-│   └── ui/                    # Libreria di componenti UI condivisi
-├── docker-compose.yaml        # Configurazione Docker
-├── package.json               # Configurazione principale del progetto
-├── prisma.config.ts           # Configurazione Prisma
-└── turbo.json                 # Configurazione Turborepo
+│   ├── database/              # Schema Prisma + migrazioni
+│   ├── eslint-config/         # Config ESLint condivisa
+│   ├── typescript-config/     # Config TypeScript condivisa
+│   └── ui/                    # Componenti UI condivisi (Button, Card, Code)
+├── docker-compose.yml         # Infrastruttura (PostgreSQL, Redis, MinIO)
+├── dockercompose.yaml         # Infrastruttura alternativa (PostgreSQL, Redis, MinIO)
+├── turbo.json                 # Pipeline Turborepo
+└── start.bat                  # Script avvio Windows
 ```
 
-## Requisiti di Sistema
+## Stack Tecnologico
+
+| Componente | Tecnologia |
+|---|---|
+| **Frontend** | Next.js 14, React 18, TypeScript, Tailwind CSS v4 |
+| **Backend** | NestJS 11, TypeScript, Prisma 5 (ORM) |
+| **Database** | PostgreSQL 16 |
+| **Cache** | Redis 7 |
+| **Storage** | MinIO (S3-compatible) |
+| **Container** | Docker (`itzg/minecraft-server`) |
+| **Real-time** | Socket.IO, xterm.js |
+| **Code quality** | Turborepo, ESLint, Prettier |
+
+## Prerequisiti
+
 - Node.js >= 18
-- npm >= 11.12.1
-- Docker (opzionale, per l'ambiente di sviluppo)
+- npm >= 11
+- Docker & Docker Compose (per infrastruttura e server Minecraft)
+- Git
 
-## Installazione
-1. Clona il repository:
-   ```bash
-   git clone https://github.com/Rockroky/OpenHostMC.git
-   cd OPENHOSTMC/openhostmc-monorepo
-   ```
+## Installazione Rapida
 
-2. Installa le dipendenze:
-   ```bash
-   npm install
-   ```
+```bash
+# 1. Clona
+git clone https://github.com/Rockroky/OpenHostMC.git
+cd OpenHostMC
 
-3. Configura il database (se necessario):
-   ```bash
-   npm run db:migrate
-   ```
+# 2. Installa dipendenze
+npm install
 
-## Configurazione
-### Variabili d'Ambiente
-Assicurati di configurare le variabili d'ambiente necessarie per ogni applicazione. Esempio per il servizio di orchestrazione:
+# 3. Avvia infrastruttura (PostgreSQL, Redis, MinIO)
+docker compose -f docker-compose.yml up -d
+
+# 4. Esegui migrazioni database
+npm run db:push
+
+# 5. (Opzionale) Seed database
+npm run db:seed
+
+# 6. Avvia backend (orchestrator) — http://localhost:3002
+npm run dev --filter=orchestrator-service
+
+# 7. Avvia frontend — http://localhost:3001
+npm run dev --filter=frontend
+```
+
+Su Windows è disponibile `start.bat` che automatizza tutti i passaggi.
+
+## Avvio Manuale
+
+```bash
+# Backend (orchestrator)
+cd apps/orchestrator-service
+npm run start:dev          # sviluppo (http://localhost:3002)
+# oppure
+npm run start:prod         # produzione
+
+# Frontend
+cd apps/frontend
+npm run dev                # sviluppo (http://localhost:3001)
+# oppure
+npm run build && npm start # produzione
+```
+
+## Variabili d'Ambiente
+
+Crea un file `.env` nella radice del progetto:
 
 ```env
-DATABASE_URL="postgresql://user:password@localhost:5432/dbname"
-JWT_SECRET="your_jwt_secret"
+# Database
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/openhostmc"
+
+# Auth (orchestrator-service/.env)
+JWT_SECRET="your-secret-key"
+SUPERADMIN_EMAIL="admin@example.com"
+SUPERADMIN_PASSWORD="secure-password"
 ```
 
-### Docker
-Se desideri utilizzare Docker per l'ambiente di sviluppo, puoi avviare i servizi con:
+## Funzionalità
 
-```bash
-docker-compose up -d
+### Gestione Server Minecraft
+- **Server types**: Vanilla, Paper, Spigot, Forge, NeoForge, Fabric, Quilt, Magma, Mohist, Bedrock
+- **Ciclo vita**: Crea, Avvia, Ferma, Elimina server con container Docker isolati
+- **Configurazione**: MOTD, difficoltà, modalità di gioco, online-mode, memoria RAM, CPU
+- **Server.properties**: Editor completo tramite API dedicata
+
+### Console Real-time
+- Terminale interattivo Web via xterm.js + Socket.IO
+- Streaming log Docker in tempo reale (ultime 100 righe + follow mode)
+- Invio comandi RCON direttamente dalla UI
+- Metriche CPU/RAM in tempo reale via Docker stats
+
+### Whitelist e Ban
+- Aggiunta/rimozione player con risoluzione UUID automatica
+- Supporto **Premium** (Mojang API) e **Cracked** (Offline UUID v3 MD5)
+- Sincronizzazione immediata via RCON
+- Ban player, ban IP, pardon player/IP
+- Lettura usercache.json
+
+### Gestione Mod e Modpack
+- Upload bulk di file `.jar` e `.zip`
+- Auto-estrazione automatica archivi `.zip` nella root del server
+- Export download dell'intero pacchetto `/mods`
+- Interfaccia drag-and-drop
+
+### Multi-utente e Piani
+- Ruoli: USER, ADMIN, SUPERADMIN
+- Piani/tier con limiti: server massimi, RAM, CPU, storage, player
+- Isolamento tenant (ogni utente vede solo i propri server)
+- SuperAdmin: gestione utenti, piani, statistiche globali
+
+## API (Orchestrator — `/orchestrator`)
+
+| Endpoint | Metodo | Descrizione |
+|---|---|---|
+| `/orchestrator/auth/register` | POST | Registrazione utente |
+| `/orchestrator/auth/login` | POST | Login (JWT) |
+| `/orchestrator/auth/me` | GET | Profilo utente corrente |
+| `/orchestrator/auth/change-password` | PATCH | Cambio password |
+| `/orchestrator/servers` | GET | Lista server utente |
+| `/orchestrator/servers` | POST | Crea nuovo server |
+| `/orchestrator/servers/:id` | GET | Dettaglio server |
+| `/orchestrator/servers/:id` | PATCH | Aggiorna server |
+| `/orchestrator/servers/:id` | DELETE | Elimina server |
+| `/orchestrator/servers/:id/start` | POST | Avvia server |
+| `/orchestrator/servers/:id/stop` | POST | Ferma server |
+| `/orchestrator/servers/:id/status` | GET | Stato server |
+| `/orchestrator/servers/:id/properties` | GET/PATCH | server.properties |
+| `/orchestrator/servers/:id/whitelist` | POST/DELETE | Whitelist |
+| `/orchestrator/servers/:id/whitelist/toggle` | POST | Attiva/disattiva whitelist |
+| `/orchestrator/servers/:id/bans` | POST/DELETE | Ban player |
+| `/orchestrator/servers/:id/bans/ip` | POST/DELETE | Ban IP |
+| `/orchestrator/servers/:id/files/upload` | POST | Upload mod/modpack |
+| `/orchestrator/servers/:id/files/export` | GET | Export mods |
+| `/orchestrator/admin/users` | GET | [Admin] Lista utenti |
+| `/orchestrator/admin/plans` | GET/POST | [Admin] Gestione piani |
+| `/orchestrator/admin/stats` | GET | [Admin] Statistiche |
+
+### WebSocket
+
+```
+ws://localhost:3005/console?token=<jwt>
 ```
 
-## Avvio del Progetto
-### Modalità di Sviluppo
-Per avviare tutte le applicazioni in modalità di sviluppo:
+| Evento | Direzione | Descrizione |
+|---|---|---|
+| `join-console` | Client → Server | Entra nella console del server |
+| `leave-console` | Client → Server | Esce dalla console |
+| `send-command` | Client → Server | Invia comando RCON |
+| `console-output` | Server → Client | Output log in tempo reale |
+| `server-stats` | Server → Client | CPU/RAM stats ogni 2 secondi |
 
-```bash
-npm run dev
-```
+## Modelli Dati (Prisma)
 
-### Modalità di Produzione
-Per costruire e avviare le applicazioni in modalità di produzione:
-
-```bash
-npm run build
-npm start
-```
-
-## Utilizzo
-### Frontend
-L'applicazione frontend è accessibile all'indirizzo:
-
-```
-http://localhost:3000
-```
-
-### Backend
-Il servizio di orchestrazione è accessibile all'indirizzo:
-
-```
-http://localhost:3001
-```
-
-## API
-Il progetto espone diverse API per interagire con i servizi. Di seguito sono riportate alcune delle principali:
-
-### Autenticazione
-- **POST** `/auth/login`: Effettua il login e ottieni un token JWT.
-- **POST** `/auth/register`: Registra un nuovo utente.
-
-### Gestione Server
-- **GET** `/servers`: Ottieni la lista dei server.
-- **POST** `/servers`: Crea un nuovo server.
-- **GET** `/servers/{id}`: Ottieni i dettagli di un server specifico.
-- **PUT** `/servers/{id}`: Aggiorna un server.
-- **DELETE** `/servers/{id}`: Elimina un server.
-
-## Contributi
-Se desideri contribuire al progetto, segui questi passaggi:
-
-1. Forka il repository.
-2. Crea un branch per la tua feature o fix:
-   ```bash
-   git checkout -b feature/nome-feature
-   ```
-3. Fai commit delle tue modifiche:
-   ```bash
-   git commit -m "Aggiunta nuova feature"
-   ```
-4. Push del branch:
-   ```bash
-   git push origin feature/nome-feature
-   ```
-5. Apri una Pull Request.
+- **Plan**: nome, max_servers, ram_mb, cpu_cores, storage_gb, max_players, limiti backup/coda
+- **User**: email, username, password_hash, ruolo, piano associato
+- **McServer**: nome, tipo, versione, stato, porta, RCON, proprietario, piano
+- **ServerSetting**: coppie chiave/valore categorizzate (world, gameplay, performance, network, security, advanced)
+- **PortPool**: pool di porte assegnate ai server
+- **Modpack**: modpack installati per server
 
 ## Licenza
-Questo progetto è distribuito sotto la licenza MIT. Consulta il file `LICENSE` per ulteriori dettagli.
 
-```sh
-npx turbo dev --filter=web
-npm exec turbo dev --filter=web
-npm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-npm exec turbo login
-npm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-npm exec turbo link
-npm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+MIT

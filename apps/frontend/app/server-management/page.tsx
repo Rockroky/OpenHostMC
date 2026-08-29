@@ -40,6 +40,21 @@ const ENUM_PROPERTIES: Record<string, { default: string, options: string[] }> = 
   }
 };
 
+const RANGE_PROPERTIES: Record<string, { default: number, min: number, max: number, unit?: string }> = {
+  'max-players': { default: 20, min: 1, max: 1000, unit: ' players' },
+  'view-distance': { default: 10, min: 3, max: 32, unit: ' chunks' },
+  'simulation-distance': { default: 10, min: 3, max: 32, unit: ' chunks' },
+  'max-tick-time': { default: 60000, min: -1, max: 2147483647, unit: ' ms' },
+  'network-compression-threshold': { default: 256, min: -1, max: 2147483647, unit: ' bytes' }
+};
+
+const NUMBER_PROPERTIES = [
+  'server-port', 'query.port', 'rcon.port', 'max-world-size', 
+  'player-idle-timeout', 'rate-limit', 'function-permission-level',
+  'op-permission-level', 'max-chained-neighbor-updates',
+  'entity-broadcast-range-percentage'
+];
+
 // Definizione di tutte le proprietà (oltre 70) con categoria e tipo
 const PROPERTIES_SCHEMA = [
   { key: 'motd', label: 'Messaggio del server', type: 'text', category: 'Generale' },

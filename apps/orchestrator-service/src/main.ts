@@ -68,7 +68,7 @@ async function bootstrap() {
   // Add global prefix for all routes
   app.setGlobalPrefix('orchestrator');
   
-  const port = process.env.PORT ?? 3005;
+  const port = process.env.PORT ?? 3002;
   await app.listen(port, '0.0.0.0');
   console.log(`Orchestrator service running on port ${port}`);
 }

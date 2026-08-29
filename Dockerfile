@@ -21,8 +21,9 @@ RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
 # Esegui la build di tutte le app (Orchestrator e Frontend)
 RUN npm run build
 
-# Esponi le porte (3000 frontend, 3005 orchestrator)
+# Esponi le porte (3000 frontend, 3002 orchestrator HTTP, 3005 orchestrator WebSocket)
 EXPOSE 3000
+EXPOSE 3002
 EXPOSE 3005
 
 # Avvia sia il frontend che l'orchestrator

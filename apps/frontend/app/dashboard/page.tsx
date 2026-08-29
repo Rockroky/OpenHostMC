@@ -447,13 +447,13 @@ export default function DashboardPage() {
                     </button>
                     <div className="flex gap-2">
                       <Link
-                        href={`/dashboard/servers/${server.id}/console`}
+                        href={`/console?serverId=${server.id}`}
                         className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-center py-2 rounded-lg text-sm font-bold transition-colors"
                       >
                         📟 Console
                       </Link>
                       <Link
-                        href={`/dashboard/servers/${server.id}/management`}
+                        href={`/server-management?serverId=${server.id}`}
                         className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-center py-2 rounded-lg text-sm font-bold transition-colors"
                       >
                         ⚙️ Gestisci

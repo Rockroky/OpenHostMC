@@ -17,6 +17,7 @@ export class DockerService {
   // Mappatura completa server.properties -> variabili d'ambiente itzg/minecraft-server
   private readonly ENV_MAPPING: Record<string, string> = {
     'online-mode': 'ONLINE_MODE',
+    'white-list': 'ENABLE_WHITELIST',
     'max-players': 'MAX_PLAYERS',
     'difficulty': 'DIFFICULTY',
     'motd': 'MOTD',
@@ -116,7 +117,7 @@ export class DockerService {
       this.logger.log(`ENABLE_RCON=TRUE, ENABLE_WHITELIST=FALSE for container ${containerName}`);
 
       for (const [propKey, envKey] of Object.entries(this.ENV_MAPPING)) {
-        if (properties[propKey]) {
+        if (properties[propKey] !== undefined && properties[propKey] !== null && properties[propKey] !== '') {
           envVars.push(`${envKey}=${properties[propKey]}`);
         }
       }

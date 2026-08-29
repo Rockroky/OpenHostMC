@@ -19,33 +19,23 @@ const BOOLEAN_PROPERTIES = [
   'sync-chunk-writes', 'use-native-transport'
 ];
 
-const ENUM_PROPERTIES: Record<string, { default: string, options: { value: string, label: string }[] }> = {
+const ENUM_PROPERTIES: Record<string, { default: string, options: string[] }> = {
   'gamemode': {
     default: 'survival',
-    options: [
-      { value: 'survival', label: 'Survival' },
-      { value: 'creative', label: 'Creative' },
-      { value: 'adventure', label: 'Adventure' },
-      { value: 'spectator', label: 'Spectator' }
-    ]
+    options: ['survival', 'creative', 'adventure', 'spectator']
   },
   'difficulty': {
     default: 'easy',
-    options: [
-      { value: 'peaceful', label: 'Peaceful' },
-      { value: 'easy', label: 'Easy' },
-      { value: 'normal', label: 'Normal' },
-      { value: 'hard', label: 'Hard' }
-    ]
+    options: ['peaceful', 'easy', 'normal', 'hard']
   },
   'level-type': {
     default: 'minecraft:normal',
     options: [
-      { value: 'minecraft:normal', label: 'Normal' },
-      { value: 'minecraft:flat', label: 'Flat' },
-      { value: 'minecraft:large_biomes', label: 'Large Biomes' },
-      { value: 'minecraft:amplified', label: 'Amplified' },
-      { value: 'minecraft:single_biome_surface', label: 'Single Biome' }
+      'minecraft:normal', 
+      'minecraft:flat', 
+      'minecraft:large_biomes', 
+      'minecraft:amplified', 
+      'minecraft:single_biome_surface'
     ]
   }
 };

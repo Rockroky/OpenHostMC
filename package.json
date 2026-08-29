@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "start": "npx concurrently \"npm run start:prod --workspace=apps/orchestrator-service\" \"npm run start --workspace=apps/frontend\"",
+    "start": "npx prisma db push --schema=packages/database/prisma/schema.prisma --accept-data-loss && npx concurrently \"npm run start:prod --workspace=apps/orchestrator-service\" \"npm run start --workspace=apps/frontend\"",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",

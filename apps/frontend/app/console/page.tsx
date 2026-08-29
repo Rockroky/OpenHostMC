@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { io, Socket } from 'socket.io-client';
 import '@xterm/xterm/css/xterm.css';
 
-export default function ConsolePage() {
+import { Suspense } from 'react';
+
+function ConsoleInner() {
   const searchParams = useSearchParams();
   const serverId = searchParams?.get('serverId');
   const terminalRef = useRef<HTMLDivElement>(null);
@@ -80,7 +82,6 @@ export default function ConsolePage() {
       isDisposed = true;
       socket.current?.disconnect();
       term.current?.dispose();
-      // Remove resize listener would go here, but handled implicitly
     };
   }, [mounted, serverId]);
 
@@ -140,5 +141,13 @@ export default function ConsolePage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function ConsolePage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-white">Caricamento console...</div>}>
+      <ConsoleInner />
+    </Suspense>
   );
 }

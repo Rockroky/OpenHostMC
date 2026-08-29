@@ -73,13 +73,25 @@ Su Windows è disponibile `start.bat` che automatizza tutti i passaggi.
 
 L'ambiente di testing principale è stato migrato da Windows a un server TrueNAS locale, in attesa del server definitivo per la produzione. Grazie a **GitHub Actions**, ogni push sul branch `main` genera in automatico l'immagine Docker aggiornata.
 
-**Per eseguire o aggiornare l'app su TrueNAS SCALE:**
-1. Vai su **Apps** -> **Discover Apps** -> **Custom App**.
-2. In **App Name** inserisci: `openhostmc`.
-3. In **Image Repository** inserisci: `ghcr.io/rockroky/openhostmc`.
-4. In **Image Tag** inserisci: `latest`.
-5. Nella sezione **Networking/Port Forwarding**, mappa le porte necessarie (es. `3000` per il Frontend e `3005` per l'Orchestrator, a seconda di come configuri le variabili).
-6. Salva e fai il deploy! *(A ogni tuo nuovo push su GitHub, TrueNAS rileverà l'aggiornamento dell'immagine).*
+**Risoluzione Problemi Comuni su TrueNAS (Docker in Docker / Bind Mounts):**
+Se l'app OpenHostMC gira in un container (come app personalizzata su TrueNAS) e cerca di spawnare container Docker per i server Minecraft comunicando tramite `/var/run/docker.sock`, potrebbe incorrere in un errore del tipo `mkdir /app: read-only file system`. 
+Questo accade perché i path usati all'interno di OpenHostMC (es. `/app/apps/...`) vengono interpretati da Docker come path *sull'host* TrueNAS (che è read-only).
+- **Soluzione adottata:** Abbiamo introdotto la variabile d'ambiente `HOST_DATA_PATH`.
+- **Come configurare:** Su TrueNAS, aggiungi la variabile d'ambiente `HOST_DATA_PATH=/mnt/tuo-pool/openhostmc-data` (il percorso reale del NAS). L'app userà questo path al posto di quello interno quando comunica con il socket Docker, risolvendo il problema.
+
+## Scalabilità e Deploy su Proxmox VE (Produzione)
+
+Per scalare l'infrastruttura o passare a un ambiente di produzione su **Proxmox VE**, le modifiche necessarie sono minime ma cruciali per la performance:
+
+1. **Niente Docker-in-Docker su LXC:** Su Proxmox è consigliato eseguire OpenHostMC su una VM dedicata (es. Ubuntu Server o Debian) per avere il pieno supporto a Docker, oppure in un container LXC *Privileged* abilitando l'opzione Nesting e i profili Docker.
+2. **Cluster Docker Swarm / Kubernetes:** In un'ottica di scalabilità orizzontale, il `DockerService` andrebbe aggiornato per comunicare con l'API di Docker Swarm o Kubernetes, permettendo di spawnare server di Minecraft su nodi differenti del cluster invece che solo sull'host locale.
+3. **Storage Condiviso (NFS/Ceph):** Su Proxmox, al posto della cartella locale per i dati (`data/servers`), potresti montare un volume di rete (NFS o Ceph) per permettere la migrazione a caldo (Live Migration) o lo spawn su altri nodi senza perdere i mondi dei server.
+4. **Proxy / Ingress:** L'uso di un Reverse Proxy (Traefik o NGINX Proxy Manager) su Proxmox ti permetterebbe di gestire agevolmente i domini per i server (`server1.tuodominio.com`) piuttosto che esporre le porte dirette.
+
+Per eseguire l'app su una VM Proxmox con Docker installato:
+1. Clona la repository.
+2. Esegui `docker compose up -d` (usa il file compose completo che includa anche l'app stessa se configurato).
+3. Assicurati di esporre `/var/run/docker.sock` al container di orchestrazione.
 
 ## Avvio Manuale
 

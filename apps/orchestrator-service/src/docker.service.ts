@@ -71,20 +71,24 @@ export class DockerService {
     const containerName = this.getContainerName(serverId);
 
     // Configurazione path sull'host per il Bind Mount (Fase 2)
-    const serverDataPath = path.join(
+    const internalDataPath = path.join(
       process.cwd(),
       'data',
       'servers',
       serverId
     );
+    
+    const hostDataPath = process.env.HOST_DATA_PATH 
+      ? path.join(process.env.HOST_DATA_PATH, serverId) 
+      : internalDataPath;
 
     try {
       this.logger.log(`Tento di avviare il server ${serverId} sulla porta ${port} con ${options.ramMb}MB RAM e ${options.cpuCores} Cores`);
       
-      // Assicurati che la cartella sull'host esista
-      if (!fs.existsSync(serverDataPath)) {
-        await fs.promises.mkdir(serverDataPath, { recursive: true });
-        this.logger.log(`Cartella creata sull'host: ${serverDataPath}`);
+      // Assicurati che la cartella esista localmente nel container di OpenHostMC
+      if (!fs.existsSync(internalDataPath)) {
+        await fs.promises.mkdir(internalDataPath, { recursive: true });
+        this.logger.log(`Cartella creata localmente: ${internalDataPath}`);
       }
 
       // 1. Pull dell'immagine
@@ -140,7 +144,7 @@ export class DockerService {
         name: containerName,
         Env: envVars,
         HostConfig: {
-          Binds: [`${serverDataPath}:/data`],
+          Binds: [`${hostDataPath}:/data`],
           PortBindings: {
             '25565/tcp': [{ HostPort: port.toString() }],
           },
@@ -152,7 +156,7 @@ export class DockerService {
 
       // 4. Avvia il container
       await container.start();
-      this.logger.log(`✅ Container ${containerName} avviato con successo con Bind Mount in ${serverDataPath}`);
+      this.logger.log(`✅ Container ${containerName} avviato con successo con Bind Mount in ${hostDataPath}`);
       
       return { status: 'STARTED', containerName, port, rconPassword, rconPort };
 
@@ -278,16 +282,16 @@ async executeRconCommand(serverId: string, command: string): Promise<void> {
   }
 
   private async savePropertiesToDisk(serverId: string, fileContent: string) {
-    const serverDataPath = path.join(
+    const internalDataPath = path.join(
       process.cwd(),
       'data',
       'servers',
       serverId
     );
-    const filePath = path.join(serverDataPath, 'server.properties');
+    const filePath = path.join(internalDataPath, 'server.properties');
 
-    if (!fs.existsSync(serverDataPath)) {
-      await fs.promises.mkdir(serverDataPath, { recursive: true });
+    if (!fs.existsSync(internalDataPath)) {
+      await fs.promises.mkdir(internalDataPath, { recursive: true });
     }
 
     await fs.promises.writeFile(filePath, fileContent, 'utf8');

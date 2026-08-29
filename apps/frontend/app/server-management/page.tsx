@@ -8,6 +8,48 @@ interface ServerProperties {
   [key: string]: string;
 }
 
+const BOOLEAN_PROPERTIES = [
+  'allow-nether', 'allow-flight', 'enable-command-block', 'enable-rcon', 
+  'enable-query', 'spawn-monsters', 'spawn-animals', 'spawn-npcs', 
+  'pvp', 'hardcore', 'require-resource-pack', 'force-gamemode', 
+  'white-list', 'enforce-whitelist', 'prevent-proxy-connections',
+  'broadcast-rcon-to-ops', 'broadcast-console-to-ops', 'online-mode',
+  'enable-jmx-monitoring', 'enable-status', 'enforce-secure-profile',
+  'generate-structures', 'hide-online-players', 'log-ips', 'snooper-enabled',
+  'sync-chunk-writes', 'use-native-transport'
+];
+
+const ENUM_PROPERTIES: Record<string, { default: string, options: { value: string, label: string }[] }> = {
+  'gamemode': {
+    default: 'survival',
+    options: [
+      { value: 'survival', label: 'Survival' },
+      { value: 'creative', label: 'Creative' },
+      { value: 'adventure', label: 'Adventure' },
+      { value: 'spectator', label: 'Spectator' }
+    ]
+  },
+  'difficulty': {
+    default: 'easy',
+    options: [
+      { value: 'peaceful', label: 'Peaceful' },
+      { value: 'easy', label: 'Easy' },
+      { value: 'normal', label: 'Normal' },
+      { value: 'hard', label: 'Hard' }
+    ]
+  },
+  'level-type': {
+    default: 'minecraft:normal',
+    options: [
+      { value: 'minecraft:normal', label: 'Normal' },
+      { value: 'minecraft:flat', label: 'Flat' },
+      { value: 'minecraft:large_biomes', label: 'Large Biomes' },
+      { value: 'minecraft:amplified', label: 'Amplified' },
+      { value: 'minecraft:single_biome_surface', label: 'Single Biome' }
+    ]
+  }
+};
+
 // Definizione di tutte le proprietà (oltre 70) con categoria e tipo
 const PROPERTIES_SCHEMA = [
   { key: 'motd', label: 'Messaggio del server', type: 'text', category: 'Generale' },

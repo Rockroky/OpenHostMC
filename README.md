@@ -69,6 +69,18 @@ npm run dev --filter=frontend
 
 Su Windows è disponibile `start.bat` che automatizza tutti i passaggi.
 
+## Deploy su TrueNAS (Testing / Produzione Temporanea)
+
+L'ambiente di testing principale è stato migrato da Windows a un server TrueNAS locale, in attesa del server definitivo per la produzione. Grazie a **GitHub Actions**, ogni push sul branch `main` genera in automatico l'immagine Docker aggiornata.
+
+**Per eseguire o aggiornare l'app su TrueNAS SCALE:**
+1. Vai su **Apps** -> **Discover Apps** -> **Custom App**.
+2. In **App Name** inserisci: `openhostmc`.
+3. In **Image Repository** inserisci: `ghcr.io/rockroky/openhostmc`.
+4. In **Image Tag** inserisci: `latest`.
+5. Nella sezione **Networking/Port Forwarding**, mappa le porte necessarie (es. `3000` per il Frontend e `3005` per l'Orchestrator, a seconda di come configuri le variabili).
+6. Salva e fai il deploy! *(A ogni tuo nuovo push su GitHub, TrueNAS rileverà l'aggiornamento dell'immagine).*
+
 ## Avvio Manuale
 
 ```bash

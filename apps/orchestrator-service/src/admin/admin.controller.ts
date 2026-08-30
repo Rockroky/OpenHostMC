@@ -230,6 +230,35 @@ export class AdminController {
     }
   }
 
+  @Delete('plans/:id')
+  async deletePlan(@Param('id') id: string) {
+    try {
+      const planToDelete = await this.prisma.plan.findUnique({ where: { id } });
+      if (!planToDelete) throw new Error('Piano non trovato');
+      if (planToDelete.name === 'Free' || planToDelete.name === 'SuperAdmin') {
+        throw new Error('Impossibile eliminare i piani di sistema (Free e SuperAdmin).');
+      }
+
+      // Trova il piano "Free" per fare il fallback
+      const freePlan = await this.prisma.plan.findFirst({ where: { name: 'Free' } });
+      if (!freePlan) throw new Error('Piano Free non trovato per il fallback.');
+
+      // Sposta tutti gli utenti collegati al piano da eliminare verso il piano Free
+      await this.prisma.user.updateMany({
+        where: { plan_id: id },
+        data: { plan_id: freePlan.id },
+      });
+
+      // Elimina il piano
+      await this.prisma.plan.delete({ where: { id } });
+      
+      return { success: true, message: 'Piano eliminato con successo. Gli utenti affetti sono stati spostati sul piano Free.' };
+    } catch (error: any) {
+      this.logger.error('Error deleting plan:', error);
+      return { error: 'Failed to delete plan', details: error.message };
+    }
+  }
+
   // ===== SERVER MANAGEMENT =====
 
   @Get('servers')

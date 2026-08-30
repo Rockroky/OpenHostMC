@@ -47,6 +47,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isCreatingPlan, setIsCreatingPlan] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -117,6 +118,53 @@ export default function AdminPage() {
 
       // Update local state
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, plan_id: planId } : u));
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleCreatePlan = async () => {
+    const name = prompt("Nome del nuovo piano (es. VIP):");
+    if (!name) return;
+    const ram_mb = parseInt(prompt("RAM totale (MB):", "4096") || "4096", 10);
+    const max_servers = parseInt(prompt("Numero massimo di server:", "5") || "5", 10);
+    const max_running_servers = parseInt(prompt("Numero massimo server accesi contemporaneamente:", "2") || "2", 10);
+    const cpu_cores = parseFloat(prompt("Core CPU totali (es. 2.0):", "2.0") || "2.0");
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/admin/plans`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name, ram_mb, max_servers, max_running_servers, cpu_cores,
+          storage_gb: 15, max_players: 30, daily_uptime_hours: 24, backup_max_stored: 3, backup_frequency_hours: 24, queue_enabled: false
+        }),
+      });
+      if (!response.ok) throw new Error('Errore durante la creazione del piano');
+      fetchData(); // Ricarica
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDeletePlan = async (planId: string) => {
+    if (!confirm("Sei sicuro di voler eliminare questo piano? Attenzione: assicurati che non ci siano utenti collegati, oppure assegna loro un altro piano prima.")) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/admin/plans/${planId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Errore eliminazione (forse il piano ha utenti attivi?)');
+      }
+      fetchData();
     } catch (err: any) {
       alert(err.message);
     }
@@ -233,7 +281,7 @@ export default function AdminPage() {
         <div className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 mt-8">
           <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
             <h2 className="text-xl font-bold">Gestione Piani (Tier)</h2>
-            <button className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm font-bold transition-colors">
+            <button onClick={handleCreatePlan} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm font-bold transition-colors">
               + Crea Nuovo Piano
             </button>
           </div>
@@ -271,7 +319,7 @@ export default function AdminPage() {
                         Modifica
                       </button>
                       {plan.name !== 'SuperAdmin' && plan.name !== 'Free' && (
-                        <button className="text-red-400 hover:text-red-300 transition-colors text-sm font-bold">
+                        <button onClick={() => handleDeletePlan(plan.id)} className="text-red-400 hover:text-red-300 transition-colors text-sm font-bold">
                           Elimina
                         </button>
                       )}

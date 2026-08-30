@@ -17,25 +17,70 @@ export class AuthService {
     const superAdminPassword = process.env.SUPERADMIN_PASSWORD;
 
     if (superAdminEmail && superAdminPassword && email === superAdminEmail && password === superAdminPassword) {
-      // Ensure a default plan exists
-      let defaultPlan = await this.prisma.plan.findFirst({ where: { name: 'Free' } });
-      if (!defaultPlan) {
-        defaultPlan = await this.prisma.plan.create({
-          data: {
-            name: 'Free',
-            max_servers: 2,
-            max_running_servers: 1,
-            ram_mb: 2048,
-            cpu_cores: 1.0,
-            storage_gb: 5,
-            max_players: 10,
-            daily_uptime_hours: 4,
-            backup_max_stored: 1,
-            backup_frequency_hours: 24,
-            queue_enabled: true,
-          },
-        });
+      // Ensure default plans exist
+      const defaultPlans = [
+        {
+          name: 'Free',
+          max_servers: 2,
+          max_running_servers: 1,
+          ram_mb: 2048,
+          cpu_cores: 1.0,
+          storage_gb: 5,
+          max_players: 10,
+          daily_uptime_hours: 4,
+          backup_max_stored: 1,
+          backup_frequency_hours: 24,
+          queue_enabled: true,
+        },
+        {
+          name: 'Contributor',
+          max_servers: 5,
+          max_running_servers: 2,
+          ram_mb: 4096,
+          cpu_cores: 2.0,
+          storage_gb: 15,
+          max_players: 30,
+          daily_uptime_hours: 12,
+          backup_max_stored: 3,
+          backup_frequency_hours: 12,
+          queue_enabled: true,
+        },
+        {
+          name: 'Premium',
+          max_servers: 10,
+          max_running_servers: 4,
+          ram_mb: 8192,
+          cpu_cores: 4.0,
+          storage_gb: 30,
+          max_players: 100,
+          daily_uptime_hours: 24,
+          backup_max_stored: 7,
+          backup_frequency_hours: 6,
+          queue_enabled: false,
+        },
+        {
+          name: 'Ultra',
+          max_servers: 20,
+          max_running_servers: 10,
+          ram_mb: 16384,
+          cpu_cores: 8.0,
+          storage_gb: 60,
+          max_players: 500,
+          daily_uptime_hours: 24,
+          backup_max_stored: 14,
+          backup_frequency_hours: 2,
+          queue_enabled: false,
+        }
+      ];
+
+      for (const planData of defaultPlans) {
+        let plan = await this.prisma.plan.findFirst({ where: { name: planData.name } });
+        if (!plan) {
+          await this.prisma.plan.create({ data: planData });
+        }
       }
+
+      let defaultPlan = await this.prisma.plan.findFirst({ where: { name: 'Free' } });
 
       // Ensure SuperAdmin infinite plan exists
       let superAdminPlan = await this.prisma.plan.findFirst({ where: { name: 'SuperAdmin' } });
@@ -150,12 +195,13 @@ export class AuthService {
       defaultPlan = await this.prisma.plan.create({
         data: {
           name: 'Free',
-          max_servers: 1,
+          max_servers: 2,
+          max_running_servers: 1,
           ram_mb: 2048,
           cpu_cores: 1.0,
           storage_gb: 5,
           max_players: 10,
-          daily_uptime_hours: 12,
+          daily_uptime_hours: 4,
           backup_max_stored: 1,
           backup_frequency_hours: 24,
           queue_enabled: true,

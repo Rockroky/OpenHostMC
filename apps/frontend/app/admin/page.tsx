@@ -19,7 +19,16 @@ interface User {
 interface Plan {
   id: string;
   name: string;
+  max_servers: number;
+  max_running_servers: number;
   ram_mb: number;
+  cpu_cores: number;
+  storage_gb: number;
+  max_players: number;
+  daily_uptime_hours: number;
+  backup_max_stored: number;
+  backup_frequency_hours: number;
+  queue_enabled: boolean;
 }
 
 interface Stats {
@@ -219,6 +228,61 @@ export default function AdminPage() {
             </table>
           </div>
         </div>
+
+        {/* Plans Table */}
+        <div className="bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 mt-8">
+          <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
+            <h2 className="text-xl font-bold">Gestione Piani (Tier)</h2>
+            <button className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm font-bold transition-colors">
+              + Crea Nuovo Piano
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-zinc-900/50 text-zinc-400 text-sm uppercase">
+                  <th className="px-6 py-4 font-medium">Nome Piano</th>
+                  <th className="px-6 py-4 font-medium">Server Max / Running</th>
+                  <th className="px-6 py-4 font-medium">Risorse (RAM/CPU/Disco)</th>
+                  <th className="px-6 py-4 font-medium">Slot Giocatori</th>
+                  <th className="px-6 py-4 font-medium">Azioni</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                {plans.map((plan) => (
+                  <tr key={plan.id} className="hover:bg-zinc-800/50 transition-colors">
+                    <td className="px-6 py-4 font-bold text-green-400">
+                      {plan.name}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-zinc-300">
+                      <span className="font-bold text-white">{plan.max_servers}</span> creati <br />
+                      <span className="font-bold text-white">{plan.max_running_servers}</span> attivi
+                    </td>
+                    <td className="px-6 py-4 text-sm text-zinc-300">
+                      RAM: <span className="font-bold text-white">{plan.ram_mb} MB</span> <br />
+                      CPU: <span className="font-bold text-white">{plan.cpu_cores} Cores</span> <br />
+                      Storage: <span className="font-bold text-white">{plan.storage_gb} GB</span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-zinc-300">
+                      {plan.max_players}
+                    </td>
+                    <td className="px-6 py-4">
+                      <button className="text-blue-400 hover:text-blue-300 transition-colors text-sm font-bold mr-3">
+                        Modifica
+                      </button>
+                      {plan.name !== 'SuperAdmin' && plan.name !== 'Free' && (
+                        <button className="text-red-400 hover:text-red-300 transition-colors text-sm font-bold">
+                          Elimina
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ model Plan {
   id                     String     @id @default(uuid())
   name                   String     @unique
   max_servers            Int
+  max_running_servers    Int        @default(1)
   ram_mb                 Int
   cpu_cores              Float
   storage_gb             Int

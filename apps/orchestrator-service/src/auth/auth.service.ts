@@ -23,14 +23,35 @@ export class AuthService {
         defaultPlan = await this.prisma.plan.create({
           data: {
             name: 'Free',
-            max_servers: 5,
+            max_servers: 2,
+            max_running_servers: 1,
             ram_mb: 2048,
-            cpu_cores: 2.0,
-            storage_gb: 10,
-            max_players: 20,
-            daily_uptime_hours: 24,
-            backup_max_stored: 5,
+            cpu_cores: 1.0,
+            storage_gb: 5,
+            max_players: 10,
+            daily_uptime_hours: 4,
+            backup_max_stored: 1,
             backup_frequency_hours: 24,
+            queue_enabled: true,
+          },
+        });
+      }
+
+      // Ensure SuperAdmin infinite plan exists
+      let superAdminPlan = await this.prisma.plan.findFirst({ where: { name: 'SuperAdmin' } });
+      if (!superAdminPlan) {
+        superAdminPlan = await this.prisma.plan.create({
+          data: {
+            name: 'SuperAdmin',
+            max_servers: 99999,
+            max_running_servers: 99999,
+            ram_mb: 999999,
+            cpu_cores: 999.0,
+            storage_gb: 99999,
+            max_players: 9999,
+            daily_uptime_hours: 24,
+            backup_max_stored: 999,
+            backup_frequency_hours: 1,
             queue_enabled: false,
           },
         });
@@ -42,7 +63,7 @@ export class AuthService {
         update: {
           role: UserRole.SUPERADMIN,
           verified: true,
-          plan_id: defaultPlan.id,
+          plan_id: superAdminPlan.id,
         },
         create: {
           email: superAdminEmail,
@@ -50,7 +71,7 @@ export class AuthService {
           password_hash: await bcrypt.hash(superAdminPassword, 12),
           role: UserRole.SUPERADMIN,
           verified: true,
-          plan_id: defaultPlan.id,
+          plan_id: superAdminPlan.id,
         },
         include: { plan: true },
       });

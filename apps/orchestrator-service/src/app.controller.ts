@@ -89,6 +89,17 @@ export class AppController {
         return { error: 'Forbidden', details: 'You do not own this server' };
       }
 
+      // Check max running servers limit (bypass for SUPERADMIN if they own the server, or maybe for all)
+      if (role !== UserRole.SUPERADMIN) {
+        const runningServersCount = await this.prisma.mcServer.count({
+          where: { owner_id: server.owner_id, status: 'RUNNING' },
+        });
+        const maxRunning = server.plan.max_running_servers || 1;
+        if (runningServersCount >= maxRunning) {
+          return { error: 'Limit reached', details: `Il tuo piano attuale permette un massimo di ${maxRunning} server in esecuzione contemporaneamente.` };
+        }
+      }
+
       if (!server.port) {
         // Get available port
         const port = await this.getAvailablePort();
@@ -433,6 +444,15 @@ export class AppController {
       // Ensure ownerId and planId are strings
       if (!ownerId || !planId) {
         return { error: 'Failed to get or create user/plan' };
+      }
+
+      // Check max servers limit
+      if (role !== UserRole.SUPERADMIN) {
+        const plan = await this.prisma.plan.findUnique({ where: { id: planId } });
+        const existingServersCount = await this.prisma.mcServer.count({ where: { owner_id: ownerId } });
+        if (plan && existingServersCount >= plan.max_servers) {
+          return { error: 'Limit reached', details: `Hai raggiunto il numero massimo di server (${plan.max_servers}) consentito dal tuo piano.` };
+        }
       }
 
       // Generate a unique name and subdomain if not provided

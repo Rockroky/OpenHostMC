@@ -107,7 +107,7 @@ export default function DashboardPage() {
         setTimeout(() => clearInterval(interval), 30000);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}`);
+        throw new Error(errorData.details || errorData.error || errorData.message || `HTTP ${response.status}`);
       }
     } catch (err: any) {
       console.error('Errore avvio:', err);

@@ -745,6 +745,9 @@ export class AppController {
 
       // Controlla se è il proprietario
       const server = await this.prisma.mcServer.findUnique({ where: { id: link.server_id } });
+      if (!server) {
+        return { error: 'Server non trovato' };
+      }
       if (server.owner_id === userId) {
         return { error: 'Sei già il proprietario di questo server' };
       }
@@ -767,7 +770,7 @@ export class AppController {
       return { success: true, serverId: link.server_id };
     } catch (error) {
       this.logger.error('Error accepting share link:', error);
-      return { error: 'Errore durante l'accettazione del link' };
+      return { error: "Errore durante l'accettazione del link" };
     }
   }
 

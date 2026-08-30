@@ -81,6 +81,31 @@ export class FilesController {
     return this.filesService.exportMods(serverId, res);
   }
 
+  @Get('world/export/:serverId')
+  @UseGuards(AuthGuard('jwt'))
+  async exportWorld(
+    @Param('serverId') serverId: string,
+    @Res() res: Response,
+    @Request() req
+  ) {
+    const { userId, role } = req.user;
+    
+    // Check ownership
+    const server = await this.prisma.mcServer.findUnique({
+      where: { id: serverId }
+    });
+
+    if (!server) {
+      throw new BadRequestException('Server not found');
+    }
+
+    if (role !== UserRole.SUPERADMIN && server.owner_id !== userId) {
+      throw new BadRequestException('Forbidden: You do not own this server');
+    }
+
+    return this.filesService.exportWorld(serverId, res);
+  }
+
   @Get('list/:serverId')
   @UseGuards(AuthGuard('jwt'))
   async listFiles(

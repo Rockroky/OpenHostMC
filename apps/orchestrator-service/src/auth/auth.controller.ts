@@ -41,4 +41,16 @@ export class AuthController {
   async setupAdminUser(@Body() body: { email: string; username: string; password: string }) {
     return this.authService.register(body.email, body.username, body.password);
   }
+
+  @Post('complete-admin-setup')
+  @UseGuards(AuthGuard('jwt'))
+  async completeAdminSetup(
+    @Request() req,
+    @Body() body: { newPassword: string; securityQuestion: string; securityAnswer: string },
+  ) {
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPERADMIN') {
+      throw new Error('Solo gli admin possono completare questo setup');
+    }
+    return this.authService.completeAdminSetup(req.user.userId, body.newPassword, body.securityQuestion, body.securityAnswer);
+  }
 }

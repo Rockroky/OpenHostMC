@@ -37,8 +37,12 @@ export default function LoginPage() {
       // Imposta cookie con max-age di 15 minuti (900 secondi) per auto-logout
       document.cookie = `token=${data.access_token}; path=/; max-age=900; SameSite=Lax`;
 
-      // Reindirizza tutti gli utenti (incluso superadmin) a dashboard
-      router.push('/dashboard');
+      if (data.requiresSetup) {
+        router.push('/admin/setup');
+      } else {
+        // Reindirizza tutti gli utenti (incluso superadmin) a dashboard
+        router.push('/dashboard');
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {

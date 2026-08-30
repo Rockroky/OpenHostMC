@@ -199,7 +199,7 @@ export default function AdminPage() {
                         onChange={(e) => handleUpdatePlan(user.id, e.target.value)}
                         className="bg-zinc-800 border border-zinc-700 rounded p-1 text-sm outline-none focus:ring-1 focus:ring-green-500"
                       >
-                        <option value="">Nessun Piano</option>
+                        <option value="" disabled>Seleziona un Piano</option>
                         {plans.map(plan => (
                           <option key={plan.id} value={plan.id}>{plan.name} ({plan.ram_mb} MB)</option>
                         ))}

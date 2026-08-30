@@ -307,9 +307,15 @@ function ServerManagementInner() {
         // Load Properties
         const propRes = await fetch(`${API_BASE}/properties?serverId=${encodeURIComponent(serverId)}`, { headers });
         if (propRes.ok) {
-          const data = await propRes.json();
-          setProperties(data.properties || defaultServerProperties);
-          setIsRunning(data.isRunning || false);
+          const propData = await propRes.json();
+        
+        if (propData.properties) {
+          setProperties(propData.properties);
+        }
+        if (propData.mcType) {
+          setMcType(propData.mcType);
+        } 
+          setIsRunning(propData.isRunning || false);
         }
 
         // Load Whitelist
@@ -434,6 +440,28 @@ function ServerManagementInner() {
       const a = document.createElement('a');
       a.href = url;
       a.download = `mods_${serverId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleExportWorld = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/files/world/export/${serverId}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      
+      if (!response.ok) throw new Error('Nessun mondo trovato o errore nel download');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `world_${serverId}.zip`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -769,8 +797,28 @@ function ServerManagementInner() {
           </div>
         )}
 
-        {/* Mod & Modpack Management */}
+        {/* World Management */}
         {!isLoading && serverId && (
+          <div className="mb-8 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl">
+            <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  🌍 Gestione Mondo
+                </h3>
+                <p className="text-zinc-400 text-sm">Scarica un backup completo del mondo attuale</p>
+              </div>
+              <button 
+                onClick={handleExportWorld}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+              >
+                📥 Scarica Mondo (.zip)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Mod & Modpack Management */}
+        {!isLoading && serverId && mcType && ['FORGE', 'NEOFORGE', 'FABRIC', 'QUILT', 'MAGMA', 'MOHIST'].includes(mcType) && (
           <div className="mb-8 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl">
             <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
               <div>

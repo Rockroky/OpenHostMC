@@ -91,6 +91,7 @@ export class AuthService {
 
     return {
       access_token: this.jwtService.sign(payload),
+      requiresSetup: (user.role === 'ADMIN' || user.role === 'SUPERADMIN') && !user.setup_completed,
       user: {
         id: user.id,
         email: user.email,
@@ -99,6 +100,7 @@ export class AuthService {
         planId: user.plan_id || user.planId || null,
         plan: user.plan,
         requiresPasswordChange: user.requiresPasswordChange,
+        setup_completed: user.setup_completed || false,
       },
     };
   }
@@ -179,5 +181,32 @@ export class AuthService {
     });
 
     return { success: true, message: 'Password changed successfully' };
+  }
+
+  async completeAdminSetup(userId: string, newPassword: string, securityQuestion: string, securityAnswer: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('User not found');
+    if (user.setup_completed) throw new Error('Setup already completed');
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+    const hashedAnswer = await bcrypt.hash(securityAnswer.toLowerCase().trim(), 12);
+    
+    // Generate recovery key
+    const crypto = require('crypto');
+    const recoveryKey = crypto.randomBytes(16).toString('hex').toUpperCase();
+    const hashedRecoveryKey = await bcrypt.hash(recoveryKey, 12);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password_hash: hashedNewPassword,
+        security_question: securityQuestion,
+        security_answer_hash: hashedAnswer,
+        recovery_key_hash: hashedRecoveryKey,
+        setup_completed: true,
+      },
+    });
+
+    return { success: true, recoveryKey };
   }
 }

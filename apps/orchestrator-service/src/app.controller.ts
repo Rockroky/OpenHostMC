@@ -279,13 +279,18 @@ export class AppController {
 
       // If no settings found, return default properties
       if (Object.keys(properties).length === 0) {
-        return { properties: this.getDefaultProperties(), isRunning: server.status === 'RUNNING' };
+        return { 
+          properties: this.getDefaultProperties(), 
+          isRunning: server.status === 'RUNNING',
+          mcType: server.mc_type 
+        };
       }
 
       return {
         serverId,
         properties,
         isRunning: server.status === 'RUNNING',
+        mcType: server.mc_type,
       };
     } catch (error) {
       this.logger.error('Error getting properties:', error);
@@ -433,7 +438,7 @@ export class AppController {
       // Generate a unique name and subdomain if not provided
       const baseName = body.name.trim();
       const uniqueId = uuidv4().slice(0, 8);
-      const name = `${baseName}-${uniqueId}`;
+      const name = baseName;
       const subdomain = (body.subdomain || baseName.toLowerCase().replace(/\s+/g, '-')).substring(0, 50) + `-${uniqueId}`;
 
       // Check for subdomain uniqueness before creation

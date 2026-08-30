@@ -85,6 +85,25 @@ export class FilesService {
     await archive.finalize();
   }
 
+  async exportWorld(serverId: string, res: Response) {
+    const serverPath = this.getServerPath(serverId);
+    const worldPath = path.join(serverPath, 'world'); // default world name for most servers
+
+    if (!fs.existsSync(worldPath)) {
+      throw new BadRequestException('Nessun mondo trovato da esportare');
+    }
+
+    const archive = (archiver as any)('zip', {
+      zlib: { level: 9 }
+    });
+
+    res.attachment(`world_${serverId}.zip`);
+
+    archive.pipe(res);
+    archive.directory(worldPath, false);
+    await archive.finalize();
+  }
+
   async listFiles(serverId: string, relativePath: string = '') {
     const fullPath = path.join(this.getServerPath(serverId), relativePath);
     

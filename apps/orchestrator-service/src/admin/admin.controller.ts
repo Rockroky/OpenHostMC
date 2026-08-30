@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Query, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Query, Logger, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PrismaService } from '../prisma.service';
 import { DockerService } from '../docker.service';
@@ -93,8 +93,16 @@ export class AdminController {
   async updateUser(
     @Param('id') id: string,
     @Body() body: { username?: string; role?: string; verified?: boolean; plan_id?: string | null },
+    @Req() req: any,
   ) {
     try {
+      if (req.user.userId === id && body.role !== undefined) {
+        throw new Error('Non puoi modificare i permessi del tuo stesso account.');
+      }
+      if (body.plan_id === null) {
+        throw new Error('Un utente deve obbligatoriamente avere un piano.');
+      }
+
       const updateData: any = { ...body };
       
       // Remove undefined values
@@ -112,7 +120,7 @@ export class AdminController {
 
       const { password_hash, ...sanitizedUser } = user;
       return { success: true, user: sanitizedUser };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Error updating user:', error);
       return { error: 'Failed to update user', details: error.message };
     }

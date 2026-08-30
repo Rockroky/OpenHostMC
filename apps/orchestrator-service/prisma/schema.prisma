@@ -31,6 +31,10 @@ model User {
   password_hash String
   role          UserRole   @default(USER)
   verified      Boolean    @default(false)
+  setup_completed Boolean  @default(false)
+  security_question String?
+  security_answer_hash String?
+  recovery_key_hash String?
   created_at    DateTime   @default(now())
   updated_at    DateTime   @updatedAt
   plan_id       String?

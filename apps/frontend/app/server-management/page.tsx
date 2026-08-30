@@ -293,6 +293,10 @@ function ServerManagementInner() {
   const [uploadResults, setUploadResults] = useState<{ file: string; status: string; reason?: string }[]>([]);
   const [mcType, setMcType] = useState<string | null>(null);
 
+  // Share management state
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+
   // Load properties and whitelist when serverId changes
   useEffect(() => {
     if (!serverId) return;
@@ -579,6 +583,25 @@ function ServerManagementInner() {
     } catch (error) {
       console.error('Error deleting servers:', error);
       alert('Errore nell\'eliminazione dei server');
+    }
+  };
+
+  const generateShareLink = async () => {
+    setIsGeneratingLink(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/servers/${serverId}/share`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || 'Errore nella generazione del link');
+      setShareToken(data.token);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Errore nella generazione del link');
+    } finally {
+      setIsGeneratingLink(false);
     }
   };
 

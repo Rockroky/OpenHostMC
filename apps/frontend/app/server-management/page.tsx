@@ -728,6 +728,51 @@ function ServerManagementInner() {
           )}
         </div>
 
+        {/* Share Server Management */}
+        {!isLoading && serverId && (
+          <div className="mb-8 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl">
+            <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  🤝 Condivisione Server
+                </h3>
+                <p className="text-zinc-400 text-sm">Crea un link per invitare altri utenti a gestire o visualizzare il server</p>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              <div className="bg-blue-900/20 border border-blue-800/50 p-4 rounded-lg mb-4 text-sm text-blue-200">
+                <strong>Nota:</strong> Gli utenti che accettano l'invito potranno avviare il server. Inoltre, se il loro piano (tier) lo consente, potranno anche modificare le impostazioni.
+              </div>
+              
+              {!shareToken ? (
+                <button 
+                  onClick={generateShareLink}
+                  disabled={isGeneratingLink}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 px-6 py-2 rounded-lg font-bold transition-all flex items-center gap-2"
+                >
+                  {isGeneratingLink ? 'Generazione...' : 'Genera Link di Condivisione'}
+                </button>
+              ) : (
+                <div className="flex gap-2 items-center">
+                  <input 
+                    type="text" 
+                    readOnly
+                    value={`${window.location.origin}/share/${shareToken}`}
+                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 outline-none text-zinc-300"
+                  />
+                  <button 
+                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/share/${shareToken}`)}
+                    className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg font-bold transition-all"
+                  >
+                    Copia Link
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Whitelist Management */}
         {!isLoading && serverId && (
           <div className="mb-8 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl">

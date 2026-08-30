@@ -20,6 +20,7 @@ model Plan {
   backup_max_stored      Int
   backup_frequency_hours Int
   queue_enabled          Boolean    @default(true)
+  can_edit_shared_servers Boolean    @default(true)
   created_at             DateTime   @default(now())
   servers                McServer[]
   users                  User[]
@@ -41,6 +42,7 @@ model User {
   plan_id       String?
   servers       McServer[]
   plan          Plan?      @relation(fields: [plan_id], references: [id])
+  collaborating_servers ServerCollaborator[]
 }
 
 model PortPool {
@@ -83,6 +85,8 @@ model McServer {
   portAllocation       PortPool?
   settings             ServerSetting[]
   modpacks             Modpack[]
+  shareLinks           ServerShareLink[]
+  collaborators        ServerCollaborator[]
 
   @@unique([owner_id, name])
   @@index([status])
@@ -149,4 +153,30 @@ enum SettingCategory {
   network
   security
   advanced
+}
+
+
+model ServerShareLink {
+  id         String   @id @default(uuid())
+  server_id  String
+  token      String   @unique
+  created_at DateTime @default(now())
+  expires_at DateTime?
+  server     McServer @relation(fields: [server_id], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([server_id])
+}
+
+model ServerCollaborator {
+  id         String   @id @default(uuid())
+  user_id    String
+  server_id  String
+  created_at DateTime @default(now())
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  server     McServer @relation(fields: [server_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, server_id])
+  @@index([user_id])
+  @@index([server_id])
 }

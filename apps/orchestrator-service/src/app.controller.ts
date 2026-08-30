@@ -29,10 +29,13 @@ export class AppController {
   async getServers(@Request() req) {
     const { userId } = req.user;
     
-    const where = { owner_id: userId };
-
     const servers = await this.prisma.mcServer.findMany({
-      where,
+      where: {
+        OR: [
+          { owner_id: userId },
+          { collaborators: { some: { user_id: userId } } }
+        ]
+      },
       include: { plan: true },
     });
     return servers.map(s => this.serializeServer(s));
@@ -64,7 +67,12 @@ export class AppController {
     }
 
     if (role !== UserRole.SUPERADMIN && server.owner_id !== userId) {
-      return { error: 'Forbidden' };
+      const isCollaborator = await this.prisma.serverCollaborator.findUnique({
+        where: { user_id_server_id: { user_id: userId, server_id: serverId } }
+      });
+      if (!isCollaborator) {
+        return { error: 'Forbidden' };
+      }
     }
 
     return { status: server.status || 'UNKNOWN' };
@@ -86,7 +94,12 @@ export class AppController {
 
       // Check ownership
       if (role !== UserRole.SUPERADMIN && server.owner_id !== userId) {
-        return { error: 'Forbidden', details: 'You do not own this server' };
+        const isCollaborator = await this.prisma.serverCollaborator.findUnique({
+          where: { user_id_server_id: { user_id: userId, server_id: id } }
+        });
+        if (!isCollaborator) {
+          return { error: 'Forbidden', details: 'You do not own this server and are not a collaborator' };
+        }
       }
 
       // Check max running servers limit (bypass for SUPERADMIN if they own the server, or maybe for all)
@@ -168,7 +181,12 @@ export class AppController {
       }
 
       if (role !== UserRole.SUPERADMIN && server.owner_id !== userId) {
-        return { error: 'Forbidden', details: 'You do not own this server' };
+        const isCollaborator = await this.prisma.serverCollaborator.findUnique({
+          where: { user_id_server_id: { user_id: userId, server_id: id } }
+        });
+        if (!isCollaborator) {
+          return { error: 'Forbidden', details: 'You do not own this server and are not a collaborator' };
+        }
       }
 
       await this.dockerService.stopMinecraftServer(id);
@@ -274,7 +292,12 @@ export class AppController {
       }
 
       if (role !== UserRole.SUPERADMIN && server.owner_id !== userId) {
-        throw new UnauthorizedException();
+        const isCollaborator = await this.prisma.serverCollaborator.findUnique({
+          where: { user_id_server_id: { user_id: userId, server_id: serverId } }
+        });
+        if (!isCollaborator) {
+          throw new UnauthorizedException();
+        }
       }
 
       // Try to read from database settings first
@@ -326,7 +349,13 @@ export class AppController {
       }
 
       if (role !== UserRole.SUPERADMIN && server.owner_id !== userId) {
-        throw new UnauthorizedException();
+        const isCollaborator = await this.prisma.serverCollaborator.findUnique({
+          where: { user_id_server_id: { user_id: userId, server_id: serverId } },
+          include: { user: { include: { plan: true } } }
+        });
+        if (!isCollaborator || (isCollaborator.user.plan && !isCollaborator.user.plan.can_edit_shared_servers)) {
+          throw new UnauthorizedException('Non hai i permessi per modificare questo server.');
+        }
       }
 
       // Save each property to database
@@ -645,4 +674,101 @@ export class AppController {
       'white-list': 'false'
     };
   }
+
+  @Post('servers/:id/share')
+  @UseGuards(AuthGuard('jwt'))
+  async createShareLink(@Param('id') id: string, @Request() req) {
+    const { userId, role } = req.user;
+    try {
+      const server = await this.prisma.mcServer.findUnique({ where: { id } });
+      if (!server) return { error: 'Server not found' };
+      
+      if (role !== UserRole.SUPERADMIN && server.owner_id !== userId) {
+        return { error: 'Forbidden', details: 'Solo il proprietario può creare un link di condivisione' };
+      }
+
+      const token = uuidv4();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Link valido 7 giorni
+
+      const shareLink = await this.prisma.serverShareLink.create({
+        data: {
+          server_id: id,
+          token,
+          expires_at: expiresAt,
+        }
+      });
+
+      return { success: true, token: shareLink.token };
+    } catch (error) {
+      this.logger.error('Error creating share link:', error);
+      return { error: 'Failed to create share link', details: error.message };
+    }
+  }
+
+  @Get('servers/share/:token')
+  async getShareLinkInfo(@Param('token') token: string) {
+    try {
+      const link = await this.prisma.serverShareLink.findUnique({
+        where: { token },
+        include: { server: { include: { owner: { select: { username: true } } } } }
+      });
+
+      if (!link) return { error: 'Link non valido o inesistente' };
+      if (link.expires_at && link.expires_at < new Date()) {
+        return { error: 'Link scaduto' };
+      }
+
+      return { 
+        success: true, 
+        serverName: link.server.name,
+        ownerName: link.server.owner.username
+      };
+    } catch (error) {
+      return { error: 'Errore durante il recupero delle informazioni del link' };
+    }
+  }
+
+  @Post('servers/share/:token/accept')
+  @UseGuards(AuthGuard('jwt'))
+  async acceptShareLink(@Param('token') token: string, @Request() req) {
+    const { userId } = req.user;
+    try {
+      const link = await this.prisma.serverShareLink.findUnique({
+        where: { token }
+      });
+
+      if (!link) return { error: 'Link non valido o inesistente' };
+      if (link.expires_at && link.expires_at < new Date()) {
+        return { error: 'Link scaduto' };
+      }
+
+      // Controlla se è il proprietario
+      const server = await this.prisma.mcServer.findUnique({ where: { id: link.server_id } });
+      if (server.owner_id === userId) {
+        return { error: 'Sei già il proprietario di questo server' };
+      }
+
+      // Aggiungi o aggiorna il collaboratore
+      await this.prisma.serverCollaborator.upsert({
+        where: {
+          user_id_server_id: {
+            user_id: userId,
+            server_id: link.server_id
+          }
+        },
+        update: {},
+        create: {
+          user_id: userId,
+          server_id: link.server_id
+        }
+      });
+
+      return { success: true, serverId: link.server_id };
+    } catch (error) {
+      this.logger.error('Error accepting share link:', error);
+      return { error: 'Errore durante l'accettazione del link' };
+    }
+  }
+
 }

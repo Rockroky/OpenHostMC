@@ -291,6 +291,7 @@ function ServerManagementInner() {
   const [modFiles, setModFiles] = useState<File[]>([]);
   const [isModUploading, setIsModUploading] = useState(false);
   const [uploadResults, setUploadResults] = useState<{ file: string; status: string; reason?: string }[]>([]);
+  const [mcType, setMcType] = useState<string | null>(null);
 
   // Load properties and whitelist when serverId changes
   useEffect(() => {

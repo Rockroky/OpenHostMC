@@ -119,9 +119,9 @@ export class AppController {
         properties[setting.key] = setting.value;
       }
 
-      // Inject plan limits
-      const ramMb = server.plan.ram_mb || 2048;
-      const cpuCores = server.plan.cpu_cores || 1.0;
+      // Inject allocated limits
+      const ramMb = server.allocated_ram_mb || 2048;
+      const cpuCores = server.allocated_cpu_cores || 1.0;
 
       const result = await this.dockerService.startMinecraftServer(id, server.port, properties, {
         ramMb,
@@ -414,6 +414,8 @@ export class AppController {
     mc_version: string;
     owner_id?: string;
     plan_id?: string;
+    allocated_ram_mb?: number;
+    allocated_cpu_cores?: number;
   }, @Request() req) {
     const { userId, role } = req.user;
     try {
@@ -447,11 +449,36 @@ export class AppController {
       }
 
       // Check max servers limit
+      let allocated_ram_mb = body.allocated_ram_mb || 2048;
+      let allocated_cpu_cores = body.allocated_cpu_cores || 1.0;
+
       if (role !== UserRole.SUPERADMIN) {
         const plan = await this.prisma.plan.findUnique({ where: { id: planId } });
+        
+        // Count existing servers
         const existingServersCount = await this.prisma.mcServer.count({ where: { owner_id: ownerId } });
         if (plan && existingServersCount >= plan.max_servers) {
           return { error: 'Limit reached', details: `Hai raggiunto il numero massimo di server (${plan.max_servers}) consentito dal tuo piano.` };
+        }
+
+        // Check global resource pool limits
+        if (plan) {
+          const userServers = await this.prisma.mcServer.findMany({ where: { owner_id: ownerId } });
+          const totalRamAllocated = userServers.reduce((sum, s) => sum + (s.allocated_ram_mb || 0), 0);
+          const totalCpuAllocated = userServers.reduce((sum, s) => sum + (s.allocated_cpu_cores || 0), 0);
+
+          if (totalRamAllocated + allocated_ram_mb > plan.ram_mb) {
+            return { 
+              error: 'Limit reached', 
+              details: `Memoria insufficiente nel tuo pool globale. Hai a disposizione ancora ${plan.ram_mb - totalRamAllocated} MB di RAM sui ${plan.ram_mb} MB totali.` 
+            };
+          }
+          if (totalCpuAllocated + allocated_cpu_cores > plan.cpu_cores) {
+            return { 
+              error: 'Limit reached', 
+              details: `Core CPU insufficienti nel tuo pool globale. Hai a disposizione ancora ${plan.cpu_cores - totalCpuAllocated} core sui ${plan.cpu_cores} totali.` 
+            };
+          }
         }
       }
 
@@ -481,6 +508,8 @@ export class AppController {
           mc_version: body.mc_version,
           owner_id: ownerId,
           plan_id: planId,
+          allocated_ram_mb,
+          allocated_cpu_cores,
           settings: {
             create: [
               { key: 'white-list', value: 'false', category: 'gameplay' },

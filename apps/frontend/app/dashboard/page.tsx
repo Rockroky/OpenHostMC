@@ -12,6 +12,7 @@ interface McServer {
   mc_version: string;
   mc_type: string;
   created_at: string;
+  allocated_ram_mb?: number;
   plan?: {
     ram_mb: number;
   };
@@ -401,7 +402,7 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <p className="text-zinc-400">RAM</p>
-                      <p>{server.plan ? (server.plan.ram_mb / 1024).toFixed(1) : '—'} GB</p>
+                      <p>{server.allocated_ram_mb ? (server.allocated_ram_mb / 1024).toFixed(1) : (server.plan ? (server.plan.ram_mb / 1024).toFixed(1) : '—')} GB</p>
                     </div>
                     <div>
                       <p className="text-zinc-400">Porta</p>

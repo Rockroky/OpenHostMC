@@ -64,6 +64,8 @@ model McServer {
   rcon_port            Int?
   rcon_password        String?
   container_id         String?
+  allocated_ram_mb     Int             @default(2048)
+  allocated_cpu_cores  Float           @default(1.0)
   owner_id             String
   plan_id              String
   motd                 String?         @default("A Minecraft Server")

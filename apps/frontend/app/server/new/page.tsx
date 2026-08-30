@@ -10,6 +10,8 @@ interface FormData {
   name: string;
   mc_version: string;
   mc_type: string;
+  allocated_ram_mb: number;
+  allocated_cpu_cores: number;
 }
 
 export default function CreateServerPage() {
@@ -17,6 +19,8 @@ export default function CreateServerPage() {
     name: '',
     mc_version: '1.21.4',
     mc_type: 'PAPER',
+    allocated_ram_mb: 2048,
+    allocated_cpu_cores: 1.0,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +28,10 @@ export default function CreateServerPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData({ 
+      ...formData, 
+      [name]: name.startsWith('allocated_') ? Number(value) : value 
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,6 +61,8 @@ export default function CreateServerPage() {
         name: formData.name.trim(),
         mc_version: formData.mc_version,
         mc_type: formData.mc_type,
+        allocated_ram_mb: formData.allocated_ram_mb,
+        allocated_cpu_cores: formData.allocated_cpu_cores,
         owner_id: user.id,
         plan_id: user.planId || user.plan_id,
       };
@@ -163,9 +172,40 @@ export default function CreateServerPage() {
               </select>
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="allocated_ram_mb" className="block text-sm font-semibold text-zinc-100 mb-2">RAM Assegnata (MB)</label>
+                <input
+                  type="number"
+                  id="allocated_ram_mb"
+                  name="allocated_ram_mb"
+                  value={formData.allocated_ram_mb}
+                  onChange={handleChange}
+                  min={512}
+                  step={512}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  disabled={loading}
+                />
+              </div>
+              <div>
+                <label htmlFor="allocated_cpu_cores" className="block text-sm font-semibold text-zinc-100 mb-2">CPU Cores</label>
+                <input
+                  type="number"
+                  id="allocated_cpu_cores"
+                  name="allocated_cpu_cores"
+                  value={formData.allocated_cpu_cores}
+                  onChange={handleChange}
+                  min={0.5}
+                  step={0.5}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
             <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
               <p className="text-sm text-zinc-300">
-                <span className="font-semibold">Piano Free:</span> Massimo 1 server, max 2 GB di RAM
+                <span className="font-semibold">Nota sulle Risorse:</span> Puoi distribuire liberamente la RAM e CPU totali del tuo piano tra i tuoi server.
               </p>
             </div>
 

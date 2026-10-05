@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { AlertTriangle } from 'lucide-react';
 
 export default function AdminSetupPage() {
   const [newPassword, setNewPassword] = useState('');
@@ -81,7 +82,7 @@ export default function AdminSetupPage() {
       <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white p-4">
         <div className="bg-zinc-900 p-8 rounded-2xl shadow-2xl border border-green-500/50 flex flex-col gap-6 w-full max-w-lg">
           <div className="text-center space-y-4">
-            <h1 className="text-3xl font-bold text-green-500">Setup Completato! 🎉</h1>
+            <h1 className="text-3xl font-bold text-emerald-400">Setup Completato</h1>
             <p className="text-zinc-400">
               Il tuo account admin è ora sicuro. Qui sotto c'è la tua <strong className="text-white">Chiave di Recupero Univoca</strong>.
             </p>
@@ -93,13 +94,14 @@ export default function AdminSetupPage() {
             </code>
           </div>
           
-          <div className="bg-yellow-500/10 border border-yellow-500/50 text-yellow-500 p-4 rounded-xl text-sm font-medium text-center">
-            ⚠️ ATTENZIONE: Questa chiave non verrà mai più mostrata. Salvala ORA.
+          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-300 p-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>ATTENZIONE: Questa chiave non verrà mai più mostrata. Salvala ora in un luogo sicuro.</span>
           </div>
 
           <button 
-            onClick={() => router.push('/dashboard')}
-            className="w-full bg-green-600 hover:bg-green-500 p-4 rounded-xl font-bold transition-all text-white shadow-lg shadow-green-900/20"
+            onClick={() => { window.location.href = '/dashboard'; }}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 p-4 rounded-xl font-bold transition-all text-white shadow-lg shadow-emerald-900/20"
           >
             Ho salvato la chiave, vai alla Dashboard
           </button>

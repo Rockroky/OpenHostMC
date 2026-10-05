@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { io, Socket } from 'socket.io-client';
 import '@xterm/xterm/css/xterm.css';
+import { Terminal as TerminalIcon, ArrowLeft, Send, RefreshCw } from 'lucide-react';
 
 import { Suspense } from 'react';
 
@@ -101,30 +102,39 @@ function ConsoleInner() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col p-4">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col p-4 sm:p-6">
       <div className="max-w-6xl w-full mx-auto flex-1 flex flex-col gap-4">
-        <div className="flex justify-between items-center bg-zinc-900 p-4 rounded-xl border border-zinc-800">
-          <div>
-            <h1 className="text-xl font-bold">Console Server</h1>
-            <p className="text-xs text-zinc-500 font-mono">{serverId}</p>
+        <div className="flex flex-wrap justify-between items-center bg-zinc-900 p-4 rounded-2xl border border-zinc-800 gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+              <TerminalIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-white">Console Server</h1>
+              <p className="text-xs text-zinc-500 font-mono">{serverId}</p>
+            </div>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="text-center">
-              <p className="text-xs text-zinc-400">CPU</p>
-              <p className="font-bold text-blue-400">{stats.cpu}%</p>
+          <div className="flex items-center gap-4">
+            <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center text-xs">
+              <p className="text-[10px] text-zinc-500 uppercase font-semibold">CPU</p>
+              <p className="font-bold text-blue-400 font-mono">{stats.cpu}%</p>
             </div>
-            <div className="text-center">
-              <p className="text-xs text-zinc-400">RAM</p>
-              <p className="font-bold text-green-400">{stats.ram} MB</p>
+            <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center text-xs">
+              <p className="text-[10px] text-zinc-500 uppercase font-semibold">RAM</p>
+              <p className="font-bold text-emerald-400 font-mono">{stats.ram} MB</p>
             </div>
-            <Link href="/dashboard" className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors">
-              ← Torna indietro
+            <Link
+              href="/dashboard"
+              className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 border border-zinc-700"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Dashboard</span>
             </Link>
           </div>
         </div>
 
-        <div className="flex-1 bg-[#18181b] rounded-xl border border-zinc-800 overflow-hidden relative min-h-[400px]">
-          <div ref={terminalRef} className="absolute inset-0 p-2" />
+        <div className="flex-1 bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden relative min-h-[460px] shadow-2xl">
+          <div ref={terminalRef} className="absolute inset-0 p-3" />
         </div>
 
         <form onSubmit={sendCommand} className="flex gap-2">
@@ -132,11 +142,16 @@ function ConsoleInner() {
             type="text"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
-            placeholder="Inserisci un comando (es. list, say Ciao)..."
-            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 outline-none focus:border-blue-500 font-mono transition-colors"
+            placeholder="Inserisci un comando Minecraft (es. list, op Steve, say Buongiorno)..."
+            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 outline-none focus:border-blue-500 font-mono text-xs text-zinc-100 placeholder-zinc-500 transition-colors"
           />
-          <button type="submit" className="bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded-lg font-bold transition-colors">
-            Invia
+          <button
+            type="submit"
+            disabled={!command.trim()}
+            className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 px-6 py-3 rounded-xl font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer text-white"
+          >
+            <span>Invia</span>
+            <Send className="w-3.5 h-3.5" />
           </button>
         </form>
       </div>
@@ -146,7 +161,11 @@ function ConsoleInner() {
 
 export default function ConsolePage() {
   return (
-    <Suspense fallback={<div className="p-8 text-white">Caricamento console...</div>}>
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+        <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+      </div>
+    }>
       <ConsoleInner />
     </Suspense>
   );

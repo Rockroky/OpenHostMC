@@ -156,25 +156,35 @@ enum SettingCategory {
 }
 
 
+enum CollaboratorRole {
+  MANAGER
+  OPERATOR
+}
+
 model ServerShareLink {
-  id         String   @id @default(uuid())
+  id         String            @id @default(uuid())
   server_id  String
-  token      String   @unique
-  created_at DateTime @default(now())
+  token      String            @unique
+  role       CollaboratorRole  @default(OPERATOR)
+  created_at DateTime          @default(now())
   expires_at DateTime?
-  server     McServer @relation(fields: [server_id], references: [id], onDelete: Cascade)
+  revoked    Boolean           @default(false)
+  uses       Int               @default(0)
+  max_uses   Int?              @default(100)
+  server     McServer          @relation(fields: [server_id], references: [id], onDelete: Cascade)
 
   @@index([token])
   @@index([server_id])
 }
 
 model ServerCollaborator {
-  id         String   @id @default(uuid())
+  id         String           @id @default(uuid())
   user_id    String
   server_id  String
-  created_at DateTime @default(now())
-  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  server     McServer @relation(fields: [server_id], references: [id], onDelete: Cascade)
+  role       CollaboratorRole @default(OPERATOR)
+  created_at DateTime         @default(now())
+  user       User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  server     McServer         @relation(fields: [server_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, server_id])
   @@index([user_id])

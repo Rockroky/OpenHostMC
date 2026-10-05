@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
 # Installa dipendenze di sistema necessarie per Prisma e build
-RUN apk add --no-cache openssl ca-certificates curl
+RUN apk add --no-cache openssl ca-certificates curl python3 make g++
 
 WORKDIR /app
 
@@ -17,6 +17,7 @@ RUN npm install
 
 # Genera il client Prisma
 RUN npx prisma generate --schema=packages/database/prisma/schema.prisma
+RUN npx prisma generate --schema=apps/orchestrator-service/prisma/schema.prisma
 
 # Esegui la build di tutte le app (Orchestrator e Frontend)
 RUN npm run build

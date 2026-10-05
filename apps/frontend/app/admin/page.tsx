@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Users, Server, Activity, Cpu, ShieldCheck } from 'lucide-react';
+import { getUser, getToken, clearSession } from '../lib/auth';
 
 interface User {
   id: string;
@@ -52,13 +54,14 @@ export default function AdminPage() {
 
   useEffect(() => {
     // Check for auth and role
-    const userStr = localStorage.getItem('user');
-    if (!userStr) {
-      router.push('/login');
+    const user = getUser();
+    const token = getToken();
+    if (!user || !token) {
+      clearSession();
+      window.location.href = '/login?redirect=/admin';
       return;
     }
 
-    const user = JSON.parse(userStr);
     if (user.role !== 'SUPERADMIN') {
       setError('Accesso negato. Questa pagina è riservata ai SuperAdmin.');
       setLoading(false);
@@ -72,7 +75,12 @@ export default function AdminPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
+      if (!token) {
+        clearSession();
+        window.location.href = '/login?redirect=/admin';
+        return;
+      }
       const headers = {
         'Authorization': `Bearer ${token}`,
       };
@@ -82,6 +90,12 @@ export default function AdminPage() {
         fetch(`${API_BASE}/admin/plans`, { headers }),
         fetch(`${API_BASE}/admin/stats`, { headers }),
       ]);
+
+      if (usersRes.status === 401 || plansRes.status === 401 || statsRes.status === 401) {
+        clearSession();
+        window.location.href = '/login?expired=true&redirect=/admin';
+        return;
+      }
 
       if (!usersRes.ok || !plansRes.ok || !statsRes.ok) {
         throw new Error('Errore durante il recupero dei dati');
@@ -211,10 +225,10 @@ export default function AdminPage() {
         {/* Stats Cards */}
         {stats && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <StatCard title="Utenti Totali" value={stats.totalUsers} icon="👥" />
-            <StatCard title="Server Totali" value={stats.totalServers} icon="🖥️" />
-            <StatCard title="Server Attivi" value={stats.activeServers} icon="🟢" />
-            <StatCard title="RAM Usata" value={`${(stats.totalRamUsedMb / 1024).toFixed(1)} GB`} icon="🧠" />
+            <StatCard title="Utenti Totali" value={stats.totalUsers} icon={<Users className="w-6 h-6 text-blue-400" />} />
+            <StatCard title="Server Totali" value={stats.totalServers} icon={<Server className="w-6 h-6 text-purple-400" />} />
+            <StatCard title="Server Attivi" value={stats.activeServers} icon={<Activity className="w-6 h-6 text-emerald-400" />} />
+            <StatCard title="RAM Usata" value={`${(stats.totalRamUsedMb / 1024).toFixed(1)} GB`} icon={<Cpu className="w-6 h-6 text-amber-400" />} />
           </div>
         )}
 
@@ -336,15 +350,15 @@ export default function AdminPage() {
   );
 }
 
-function StatCard({ title, value, icon }: { title: string; value: string | number; icon: string }) {
+function StatCard({ title, value, icon }: { title: string; value: string | number; icon: React.ReactNode }) {
   return (
     <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 flex items-center gap-4">
-      <div className="text-3xl bg-zinc-800 w-12 h-12 flex items-center justify-center rounded-lg">
+      <div className="bg-zinc-800/80 w-12 h-12 flex items-center justify-center rounded-lg shrink-0">
         {icon}
       </div>
       <div>
         <p className="text-zinc-400 text-sm">{title}</p>
-        <p className="text-2xl font-bold">{value}</p>
+        <p className="text-2xl font-bold text-white">{value}</p>
       </div>
     </div>
   );

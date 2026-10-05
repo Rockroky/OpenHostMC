@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Server, AlertCircle, RefreshCw, Plus, ArrowLeft, Cpu, HardDrive } from 'lucide-react';
+import { getUser, getToken, clearSession } from '../../lib/auth';
 
 const API_BASE = '/api/orchestrator';  // Usa il proxy di Next.js per evitare problemi CORS
 
@@ -43,15 +45,14 @@ export default function CreateServerPage() {
       return;
     }
 
-    const userStr = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
+    const user = getUser();
+    const token = getToken();
     
-    if (!userStr || !token) {
-      router.push('/login');
+    if (!user || !token) {
+      clearSession();
+      window.location.href = '/login?redirect=/server/new';
       return;
     }
-
-    const user = JSON.parse(userStr);
 
     setLoading(true);
     setError(null);
@@ -66,8 +67,6 @@ export default function CreateServerPage() {
         owner_id: user.id,
         plan_id: user.planId || user.plan_id,
       };
-      
-      console.log('Sending request to backend:', payload);
 
       const response = await fetch(`${API_BASE}/servers`, {
         method: 'POST',
@@ -79,16 +78,21 @@ export default function CreateServerPage() {
         body: JSON.stringify(payload),
       });
 
-      console.log('Response status:', response.status);
+      if (response.status === 401) {
+        clearSession();
+        window.location.href = '/login?expired=true&redirect=/server/new';
+        return;
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('Backend error data:', errorData);
         throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`);
       }
 
       const result = await response.json();
-      console.log('Success result:', result);
+      if (result.error) {
+        throw new Error(result.details || result.error);
+      }
       
       router.push('/dashboard');
     } catch (err: any) {
@@ -104,77 +108,89 @@ export default function CreateServerPage() {
       <header className="bg-zinc-900 border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="text-zinc-400 hover:text-white transition-colors">
-              ← Torna alla Dashboard
+            <Link href="/dashboard" className="text-zinc-400 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-semibold">
+              <ArrowLeft className="w-4 h-4" />
+              <span>Torna alla Dashboard</span>
             </Link>
-            <h1 className="text-2xl font-bold">Crea Nuovo Server</h1>
+            <span className="text-zinc-600">/</span>
+            <h1 className="text-lg font-bold text-white">Crea Nuovo Server</h1>
           </div>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 sm:p-8 shadow-xl">
           {error && (
-            <div className="mb-6 bg-red-900/50 border border-red-700 rounded-lg p-4">
-              <p className="text-red-300 font-medium">⚠️ {error}</p>
+            <div className="mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+              <p className="text-red-300 text-xs font-medium">{error}</p>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="name" className="block text-sm font-semibold text-zinc-100 mb-2">Nome del Server</label>
+              <label htmlFor="name" className="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2">
+                Nome del Server
+              </label>
               <input
                 type="text"
                 id="name"
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                placeholder="Es: Il mio server"
+                placeholder="Es. Survival Friends SMP"
                 maxLength={64}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 text-sm focus:outline-none focus:border-emerald-500 transition-colors"
                 disabled={loading}
               />
             </div>
 
             <div>
-              <label htmlFor="mc_version" className="block text-sm font-semibold text-zinc-100 mb-2">Versione Minecraft</label>
+              <label htmlFor="mc_version" className="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2">
+                Versione Minecraft
+              </label>
               <select
                 id="mc_version"
                 name="mc_version"
                 value={formData.mc_version}
                 onChange={handleChange}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
                 disabled={loading}
               >
-                <option value="1.8.9">1.8.9</option>
-                <option value="1.12.2">1.12.2</option>
-                <option value="1.16.5">1.16.5</option>
+                <option value="1.21.4">1.21.4 (Più Recente & Consigliato)</option>
                 <option value="1.20.4">1.20.4</option>
-                <option value="1.21.4">1.21.4 (Consigliato)</option>
+                <option value="1.16.5">1.16.5</option>
+                <option value="1.12.2">1.12.2</option>
+                <option value="1.8.9">1.8.9</option>
               </select>
             </div>
 
             <div>
-              <label htmlFor="mc_type" className="block text-sm font-semibold text-zinc-100 mb-2">Tipo di Server</label>
+              <label htmlFor="mc_type" className="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2">
+                Piattaforma Server
+              </label>
               <select
                 id="mc_type"
                 name="mc_type"
                 value={formData.mc_type}
                 onChange={handleChange}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-emerald-500 transition-colors cursor-pointer"
                 disabled={loading}
               >
-                <option value="PAPER">Paper (Consigliato)</option>
-                <option value="VANILLA">Vanilla</option>
-                <option value="FORGE">Forge</option>
-                <option value="FABRIC">Fabric</option>
+                <option value="PAPER">Paper (Alte prestazioni, Consigliato)</option>
+                <option value="VANILLA">Vanilla (Ufficiale Mojang)</option>
+                <option value="FORGE">Forge (Supporto Mod)</option>
+                <option value="FABRIC">Fabric (Modding Moderno)</option>
                 <option value="SPIGOT">Spigot</option>
               </select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="allocated_ram_mb" className="block text-sm font-semibold text-zinc-100 mb-2">RAM Assegnata (MB)</label>
+                <label htmlFor="allocated_ram_mb" className="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2 flex items-center gap-1.5">
+                  <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
+                  RAM (MB)
+                </label>
                 <input
                   type="number"
                   id="allocated_ram_mb"
@@ -183,12 +199,15 @@ export default function CreateServerPage() {
                   onChange={handleChange}
                   min={512}
                   step={512}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-emerald-500 transition-colors"
                   disabled={loading}
                 />
               </div>
               <div>
-                <label htmlFor="allocated_cpu_cores" className="block text-sm font-semibold text-zinc-100 mb-2">CPU Cores</label>
+                <label htmlFor="allocated_cpu_cores" className="block text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-2 flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5 text-blue-400" />
+                  CPU Cores
+                </label>
                 <input
                   type="number"
                   id="allocated_cpu_cores"
@@ -197,38 +216,37 @@ export default function CreateServerPage() {
                   onChange={handleChange}
                   min={0.5}
                   step={0.5}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-emerald-500 transition-colors"
                   disabled={loading}
                 />
               </div>
             </div>
 
-            <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
-              <p className="text-sm text-zinc-300">
-                <span className="font-semibold">Nota sulle Risorse:</span> Puoi distribuire liberamente la RAM e CPU totali del tuo piano tra i tuoi server.
-              </p>
+            <div className="bg-zinc-950/70 border border-zinc-800 rounded-xl p-4 text-xs text-zinc-400 space-y-1">
+              <span className="font-semibold text-zinc-200 block">Distribuzione Risorse:</span>
+              <p>Puoi suddividere la RAM e i core CPU complessivi del tuo piano tra i vari server creati.</p>
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-2">
               <Link
                 href="/dashboard"
-                className="flex-1 bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-lg font-medium transition-colors text-center"
+                className="flex-1 bg-zinc-800 hover:bg-zinc-700 px-4 py-3 rounded-xl text-xs font-semibold transition-colors text-center text-zinc-300"
               >
                 Annulla
               </Link>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 disabled:cursor-not-allowed px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-4 py-3 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-950/20"
               >
                 {loading ? (
                   <>
-                    <span className="animate-spin">⏳</span>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
                     <span>Creazione in corso...</span>
                   </>
                 ) : (
                   <>
-                    <span>✨</span>
+                    <Plus className="w-4 h-4" />
                     <span>Crea Server</span>
                   </>
                 )}

@@ -1,0 +1,21 @@
+{
+  "name": "OpenHostMC",
+  "short_name": "OpenHostMC",
+  "description": "Piattaforma di hosting server Minecraft moderno con container Docker dedicati.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

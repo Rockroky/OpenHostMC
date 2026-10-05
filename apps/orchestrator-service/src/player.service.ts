@@ -1,10 +1,11 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import axios from 'axios';
 import { DockerService } from './docker.service';
 import { PrismaService } from './prisma.service';
+import { CollaboratorRole } from '@prisma/client';
 
 export interface WhitelistEntry {
   uuid: string;
@@ -19,6 +20,25 @@ export class PlayerService {
     private readonly dockerService: DockerService,
     private readonly prisma: PrismaService
   ) {}
+
+  async verifyManagementPermission(server: any, userId: string): Promise<void> {
+    if (server.owner_id === userId || userId === 'SUPERADMIN') {
+      return;
+    }
+    const collaborator = await this.prisma.serverCollaborator.findUnique({
+      where: { user_id_server_id: { user_id: userId, server_id: server.id } },
+      include: { user: { include: { plan: true } } },
+    });
+    if (!collaborator) {
+      throw new ForbiddenException('Non hai i permessi per gestire questo server');
+    }
+    if (collaborator.role !== CollaboratorRole.MANAGER) {
+      throw new ForbiddenException('Accesso negato: il ruolo OPERATOR non può gestire i giocatori');
+    }
+    if (collaborator.user?.plan && !collaborator.user.plan.can_edit_shared_servers) {
+      throw new ForbiddenException('Accesso negato: il tuo piano non consente la modifica di server condivisi');
+    }
+  }
 
   private getWhitelistPath(serverId: string) {
     return path.join(this.dockerService.getServerDataPath(serverId), 'whitelist.json');
@@ -58,8 +78,7 @@ export class PlayerService {
   async toggleWhitelist(serverId: string, enabled: boolean, userId: string): Promise<{ success: boolean; message: string }> {
     const server = await this.prisma.mcServer.findUnique({ where: { id: serverId } });
     if (!server) throw new NotFoundException('Server not found');
-    if (server.owner_id !== userId && userId !== 'SUPERADMIN')
-      throw new UnauthorizedException();
+    await this.verifyManagementPermission(server, userId);
 
     // Update server.properties file (white-list=...)
     const propertiesPath = path.join(this.dockerService.getServerDataPath(serverId), 'server.properties');
@@ -110,8 +129,7 @@ export class PlayerService {
   async addToWhitelist(serverId: string, playerName: string, userId: string): Promise<any> {
     const server = await this.prisma.mcServer.findUnique({ where: { id: serverId } });
     if (!server) throw new NotFoundException('Server not found');
-    if (server.owner_id !== userId && userId !== 'SUPERADMIN')
-      throw new UnauthorizedException();
+    await this.verifyManagementPermission(server, userId);
 
     const normalizedName = playerName.toLowerCase();
 
@@ -178,8 +196,7 @@ export class PlayerService {
   async removeFromWhitelist(serverId: string, playerName: string, userId: string) {
     const server = await this.prisma.mcServer.findUnique({ where: { id: serverId } });
     if (!server) throw new NotFoundException('Server not found');
-    if (server.owner_id !== userId && userId !== 'SUPERADMIN')
-      throw new UnauthorizedException();
+    await this.verifyManagementPermission(server, userId);
 
     const normalizedName = playerName.toLowerCase();
 
@@ -258,8 +275,7 @@ export class PlayerService {
   ): Promise<{ success: boolean; message: string }> {
     const server = await this.prisma.mcServer.findUnique({ where: { id: serverId } });
     if (!server) throw new NotFoundException('Server not found');
-    if (server.owner_id !== userId && userId !== 'SUPERADMIN')
-      throw new UnauthorizedException();
+    await this.verifyManagementPermission(server, userId);
 
     // Resolve UUID based on server's online-mode
     const propertiesPath = path.join(this.dockerService.getServerDataPath(serverId), 'server.properties');
@@ -333,8 +349,7 @@ export class PlayerService {
   async pardonPlayer(serverId: string, username: string, userId: string): Promise<{ success: boolean; message: string }> {
     const server = await this.prisma.mcServer.findUnique({ where: { id: serverId } });
     if (!server) throw new NotFoundException('Server not found');
-    if (server.owner_id !== userId && userId !== 'SUPERADMIN')
-      throw new UnauthorizedException();
+    await this.verifyManagementPermission(server, userId);
 
     // Remove from banned-players.json
     const bannedPlayersPath = path.join(this.dockerService.getServerDataPath(serverId), 'banned-players.json');
@@ -396,8 +411,7 @@ export class PlayerService {
   ): Promise<{ success: boolean; message: string }> {
     const server = await this.prisma.mcServer.findUnique({ where: { id: serverId } });
     if (!server) throw new NotFoundException('Server not found');
-    if (server.owner_id !== userId && userId !== 'SUPERADMIN')
-      throw new UnauthorizedException();
+    await this.verifyManagementPermission(server, userId);
 
     // Read current banned-ips.json
     const bannedIpsPath = path.join(this.dockerService.getServerDataPath(serverId), 'banned-ips.json');
@@ -446,8 +460,7 @@ export class PlayerService {
   async pardonIp(serverId: string, ip: string, userId: string): Promise<{ success: boolean; message: string }> {
     const server = await this.prisma.mcServer.findUnique({ where: { id: serverId } });
     if (!server) throw new NotFoundException('Server not found');
-    if (server.owner_id !== userId && userId !== 'SUPERADMIN')
-      throw new UnauthorizedException();
+    await this.verifyManagementPermission(server, userId);
 
     // Remove from banned-ips.json
     const bannedIpsPath = path.join(this.dockerService.getServerDataPath(serverId), 'banned-ips.json');
@@ -475,5 +488,94 @@ export class PlayerService {
     }
 
     return { success: true, message: `IP ${ip} pardoned successfully` };
+  }
+
+  async kickPlayer(
+    serverId: string,
+    playerName: string,
+    reason: string = 'Kicked by administrator',
+    userId?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const server = await this.prisma.mcServer.findUnique({ where: { id: serverId } });
+    if (!server) throw new NotFoundException('Server not found');
+    if (userId) await this.verifyManagementPermission(server, userId);
+
+    if (!playerName || !/^[a-zA-Z0-9_]{1,16}$/.test(playerName)) {
+      throw new BadRequestException('Nome giocatore non valido');
+    }
+    const safeReason = (reason || 'Kicked by administrator').replace(/[\r\n]/g, ' ').substring(0, 100);
+
+    let isRunning = false;
+    try {
+      const container = this.dockerService.getContainer(serverId);
+      const inspect = await container.inspect();
+      isRunning = inspect.State.Running;
+    } catch (e) {}
+
+    if (isRunning) {
+      await this.dockerService.executeRconCommand(serverId, `kick ${playerName} ${safeReason}`);
+    } else {
+      throw new BadRequestException('Il server non è in esecuzione');
+    }
+
+    return { success: true, message: `Giocatore ${playerName} espulso con successo` };
+  }
+
+  async opPlayer(
+    serverId: string,
+    playerName: string,
+    userId?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const server = await this.prisma.mcServer.findUnique({ where: { id: serverId } });
+    if (!server) throw new NotFoundException('Server not found');
+    if (userId) await this.verifyManagementPermission(server, userId);
+
+    if (!playerName || !/^[a-zA-Z0-9_]{1,16}$/.test(playerName)) {
+      throw new BadRequestException('Nome giocatore non valido');
+    }
+
+    let isRunning = false;
+    try {
+      const container = this.dockerService.getContainer(serverId);
+      const inspect = await container.inspect();
+      isRunning = inspect.State.Running;
+    } catch (e) {}
+
+    if (isRunning) {
+      await this.dockerService.executeRconCommand(serverId, `op ${playerName}`);
+    } else {
+      throw new BadRequestException('Il server non è in esecuzione');
+    }
+
+    return { success: true, message: `Giocatore ${playerName} nominato operatore con successo` };
+  }
+
+  async deopPlayer(
+    serverId: string,
+    playerName: string,
+    userId?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const server = await this.prisma.mcServer.findUnique({ where: { id: serverId } });
+    if (!server) throw new NotFoundException('Server not found');
+    if (userId) await this.verifyManagementPermission(server, userId);
+
+    if (!playerName || !/^[a-zA-Z0-9_]{1,16}$/.test(playerName)) {
+      throw new BadRequestException('Nome giocatore non valido');
+    }
+
+    let isRunning = false;
+    try {
+      const container = this.dockerService.getContainer(serverId);
+      const inspect = await container.inspect();
+      isRunning = inspect.State.Running;
+    } catch (e) {}
+
+    if (isRunning) {
+      await this.dockerService.executeRconCommand(serverId, `deop ${playerName}`);
+    } else {
+      throw new BadRequestException('Il server non è in esecuzione');
+    }
+
+    return { success: true, message: `Privilegi di operatore revocati per ${playerName}` };
   }
 }

@@ -13,7 +13,7 @@ import { DockerService } from './docker.service';
 import Docker from 'dockerode';
 import * as jwt from 'jsonwebtoken';
 import { PrismaService } from './prisma.service';
-import { UserRole } from '@prisma/client';
+import { UserRole, CollaboratorRole } from '@prisma/client';
 
 @WebSocketGateway(3005, {
   cors: { origin: '*' },
@@ -31,6 +31,26 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
     private readonly prisma: PrismaService,
   ) {
     this.docker = new Docker();
+  }
+
+  broadcastServerStatus(serverId: string, status: string, port?: number | null) {
+    this.logger.log(`Broadcasting server-status-changed for ${serverId}: status=${status}, port=${port}`);
+    if (this.server) {
+      this.server.to(`server_${serverId}`).emit('server-status-changed', {
+        serverId,
+        status,
+        port: port ?? null,
+      });
+    }
+  }
+
+  broadcastServerSettings(serverId: string) {
+    this.logger.log(`Broadcasting server-settings-changed for ${serverId}`);
+    if (this.server) {
+      this.server.to(`server_${serverId}`).emit('server-settings-changed', {
+        serverId,
+      });
+    }
   }
 
   handleConnection(client: Socket) {
@@ -58,6 +78,34 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
     }
   }
 
+  @SubscribeMessage('join-server')
+  async handleJoinServer(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: { serverId: string; token?: string },
+  ) {
+    const user = this.authenticate(client, payload.token);
+    if (!user) {
+      return client.emit('server-error', 'Unauthorized: invalid or missing token');
+    }
+
+    const server = await this.prisma.mcServer.findUnique({ where: { id: payload.serverId } });
+    if (!server) {
+      return client.emit('server-error', 'Server non trovato');
+    }
+    if (server.owner_id !== user.userId && user.role !== 'SUPERADMIN') {
+      const isCollaborator = await this.prisma.serverCollaborator.findUnique({
+        where: { user_id_server_id: { user_id: user.userId, server_id: payload.serverId } },
+      });
+      if (!isCollaborator) {
+        return client.emit('server-error', 'Non autorizzato');
+      }
+    }
+
+    client.join(`server_${payload.serverId}`);
+    this.logger.log(`Client ${client.id} joined room server_${payload.serverId}`);
+    client.emit('joined-server', { serverId: payload.serverId });
+  }
+
   @SubscribeMessage('join-console')
   async handleJoinConsole(
     @ConnectedSocket() client: Socket,
@@ -73,7 +121,12 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
       return client.emit('console-error', 'Server non trovato');
     }
     if (server.owner_id !== user.userId && user.role !== 'SUPERADMIN') {
-      return client.emit('console-error', 'Non autorizzato');
+      const isCollaborator = await this.prisma.serverCollaborator.findUnique({
+        where: { user_id_server_id: { user_id: user.userId, server_id: payload.serverId } },
+      });
+      if (!isCollaborator) {
+        return client.emit('console-error', 'Non autorizzato');
+      }
     }
 
     const containerName = this.dockerService.getContainerName(payload.serverId);
@@ -124,16 +177,46 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { serverId: string; command: string; token?: string },
   ) {
+    if (!data || !data.serverId || !data.command || typeof data.command !== 'string') {
+      return client.emit('console-error', 'Bad Request: serverId e comando sono richiesti');
+    }
+
+    const trimmedCommand = data.command.trim();
+    if (!trimmedCommand || trimmedCommand.length > 500) {
+      return client.emit('console-error', 'Bad Request: il comando deve essere compreso tra 1 e 500 caratteri');
+    }
+
     const user = this.authenticate(client, data.token);
     if (!user) {
-      return client.emit('console-error', 'Unauthorized');
+      return client.emit('console-error', 'Unauthorized: autenticazione fallita');
     }
+
     const server = await this.prisma.mcServer.findUnique({ where: { id: data.serverId } });
-    if (!server || (server.owner_id !== user.userId && user.role !== 'SUPERADMIN')) {
-      return client.emit('console-error', 'Forbidden');
+    if (!server) {
+      return client.emit('console-error', 'Server non trovato');
     }
+
+    if (server.owner_id !== user.userId && user.role !== 'SUPERADMIN') {
+      const collaborator = await this.prisma.serverCollaborator.findUnique({
+        where: { user_id_server_id: { user_id: user.userId, server_id: data.serverId } },
+        include: { user: { include: { plan: true } } },
+      });
+
+      if (!collaborator) {
+        return client.emit('console-error', 'Forbidden: non sei un collaboratore autorizzato per questo server');
+      }
+
+      if (collaborator.role !== CollaboratorRole.MANAGER) {
+        return client.emit('console-error', 'Forbidden: il ruolo OPERATOR non ha i permessi per inviare comandi dalla console');
+      }
+
+      if (collaborator.user?.plan && !collaborator.user.plan.can_edit_shared_servers) {
+        return client.emit('console-error', 'Forbidden: il tuo piano di abbonamento non consente l\'invio di comandi su server condivisi');
+      }
+    }
+
     try {
-      await this.dockerService.executeRconCommand(data.serverId, data.command);
+      await this.dockerService.executeRconCommand(data.serverId, trimmedCommand);
     } catch (error) {
       client.emit('console-error', `Failed to execute command: ${error.message}`);
     }

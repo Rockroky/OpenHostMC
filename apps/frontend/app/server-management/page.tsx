@@ -1,366 +1,541 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import {
+  Server,
+  Terminal,
+  Sliders,
+  Users,
+  FolderTree,
+  Share2,
+  Play,
+  RotateCw,
+  Square,
+  Lock,
+  Shield,
+  ShieldCheck,
+  User as UserIcon,
+  HardDrive,
+  Cpu,
+  Layers,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  Check,
+  Clock,
+  ArrowRight,
+  RefreshCw,
+  Download,
+  Upload,
+  Trash2,
+  Search,
+  Sparkles,
+  Info,
+  ChevronRight,
+  ExternalLink,
+  Power,
+  Activity,
+  Globe,
+  Plus,
+  X,
+} from 'lucide-react';
+import { io, Socket } from 'socket.io-client';
+import '@xterm/xterm/css/xterm.css';
+import ShareModal from '../components/ShareModal';
+import { clearSession, getToken, getUser } from '../lib/auth';
+
+interface ServerDetails {
+  id: string;
+  name: string;
+  subdomain: string;
+  mc_version: string;
+  mc_type: string;
+  status: string;
+  port: number | null;
+  allocated_ram_mb?: number;
+  allocated_cpu_cores?: number;
+  owner_id: string;
+  owner?: { id: string; username: string; email?: string };
+  collaborators?: Array<{
+    id: string;
+    user_id: string;
+    role?: 'MANAGER' | 'OPERATOR';
+    user?: { id: string; username: string; email?: string; plan?: { can_edit_shared_servers?: boolean } };
+  }>;
+  plan?: { name: string; ram_mb: number; cpu_cores: number };
+}
 
 interface ServerProperties {
   [key: string]: string;
 }
 
-const BOOLEAN_PROPERTIES = [
-  'allow-nether', 'allow-flight', 'enable-command-block', 'enable-rcon', 
-  'enable-query', 'spawn-monsters', 'spawn-animals', 'spawn-npcs', 
-  'pvp', 'hardcore', 'require-resource-pack', 'force-gamemode', 
-  'white-list', 'enforce-whitelist', 'prevent-proxy-connections',
-  'broadcast-rcon-to-ops', 'broadcast-console-to-ops', 'online-mode',
-  'enable-jmx-monitoring', 'enable-status', 'enforce-secure-profile',
-  'generate-structures', 'hide-online-players', 'log-ips', 'snooper-enabled',
-  'sync-chunk-writes', 'use-native-transport'
-];
-
-const ENUM_PROPERTIES: Record<string, { default: string, options: string[] }> = {
-  'gamemode': {
-    default: 'survival',
-    options: ['survival', 'creative', 'adventure', 'spectator']
-  },
-  'difficulty': {
-    default: 'easy',
-    options: ['peaceful', 'easy', 'normal', 'hard']
-  },
-  'level-type': {
-    default: 'minecraft:normal',
-    options: [
-      'minecraft:normal', 
-      'minecraft:flat', 
-      'minecraft:large_biomes', 
-      'minecraft:amplified', 
-      'minecraft:single_biome_surface'
-    ]
+const CATEGORIZED_PROPERTIES: Record<
+  string,
+  {
+    title: string;
+    description: string;
+    keys: {
+      key: string;
+      label: string;
+      type: 'boolean' | 'select' | 'number' | 'text' | 'range';
+      options?: string[];
+      min?: number;
+      max?: number;
+      unit?: string;
+    }[];
   }
+> = {
+  gameplay: {
+    title: 'Gioco & Meccaniche',
+    description: 'Modalità di gioco, difficoltà, PvP e regole del mondo',
+    keys: [
+      { key: 'gamemode', label: 'Modalità di Gioco', type: 'select', options: ['survival', 'creative', 'adventure', 'spectator'] },
+      { key: 'difficulty', label: 'Difficoltà', type: 'select', options: ['peaceful', 'easy', 'normal', 'hard'] },
+      { key: 'pvp', label: 'Combattimento PvP', type: 'boolean' },
+      { key: 'hardcore', label: 'Modalità Hardcore', type: 'boolean' },
+      { key: 'allow-flight', label: 'Consenti Volo', type: 'boolean' },
+      { key: 'force-gamemode', label: 'Forza Modalità Predefinita', type: 'boolean' },
+      { key: 'spawn-monsters', label: 'Genera Mostri', type: 'boolean' },
+      { key: 'spawn-animals', label: 'Genera Animali', type: 'boolean' },
+      { key: 'spawn-npcs', label: 'Genera Villici / NPC', type: 'boolean' },
+    ],
+  },
+  world: {
+    title: 'Mondo & Generazione',
+    description: 'Nome cartella mondo, seed, tipo di bioma e Nether',
+    keys: [
+      { key: 'level-name', label: 'Nome del Mondo', type: 'text' },
+      { key: 'level-seed', label: 'Seed di Generazione', type: 'text' },
+      {
+        key: 'level-type',
+        label: 'Tipo di Mondo',
+        type: 'select',
+        options: ['minecraft:normal', 'minecraft:flat', 'minecraft:large_biomes', 'minecraft:amplified'],
+      },
+      { key: 'generate-structures', label: 'Genera Strutture (Villaggi, Fortezze)', type: 'boolean' },
+      { key: 'allow-nether', label: 'Abilita Nether', type: 'boolean' },
+      { key: 'max-world-size', label: 'Raggio Massimo Mondo (blocchi)', type: 'number' },
+    ],
+  },
+  network: {
+    title: 'Rete & Prestazioni',
+    description: 'Distanza di rendering, max giocatori, porte e tick time',
+    keys: [
+      { key: 'max-players', label: 'Numero Massimo Giocatori', type: 'range', min: 1, max: 200, unit: 'players' },
+      { key: 'view-distance', label: 'Distanza Visiva (Chunk)', type: 'range', min: 4, max: 32, unit: 'chunks' },
+      { key: 'simulation-distance', label: 'Distanza Simulazione (Chunk)', type: 'range', min: 4, max: 24, unit: 'chunks' },
+      { key: 'network-compression-threshold', label: 'Soglia Compressione Pacchetti', type: 'number' },
+      { key: 'sync-chunk-writes', label: 'Scrittura Sincrona Chunk', type: 'boolean' },
+      { key: 'max-tick-time', label: 'Timeout Watchdog Tick (ms)', type: 'number' },
+      { key: 'pause-when-empty-seconds', label: 'Pausa quando vuoto (sec)', type: 'number' },
+    ],
+  },
+  security: {
+    title: 'Sicurezza & Whitelist',
+    description: 'Autenticazione online mode, whitelist obbligatoria e protezione',
+    keys: [
+      { key: 'white-list', label: 'Whitelist Attiva', type: 'boolean' },
+      { key: 'enforce-whitelist', label: 'Forza Whitelist (Kick immediato)', type: 'boolean' },
+      { key: 'online-mode', label: 'Online Mode (Account Mojang Ufficiali)', type: 'boolean' },
+      { key: 'enforce-secure-profile', label: 'Verifica Firma Chat Sicura', type: 'boolean' },
+      { key: 'prevent-proxy-connections', label: 'Blocca Proxy / VPN', type: 'boolean' },
+      { key: 'spawn-protection', label: 'Raggio Protezione Spawn (blocchi)', type: 'number' },
+      { key: 'hide-online-players', label: 'Nascondi Lista Giocatori Online', type: 'boolean' },
+    ],
+  },
+  advanced: {
+    title: 'Avanzate & RCON',
+    description: 'MOTD del server, command blocks e protocollo RCON remoto',
+    keys: [
+      { key: 'motd', label: 'Messaggio del Giorno (MOTD)', type: 'text' },
+      { key: 'enable-command-block', label: 'Abilita Command Block', type: 'boolean' },
+      { key: 'enable-rcon', label: 'Abilita Protocollo RCON', type: 'boolean' },
+      { key: 'rcon.port', label: 'Porta RCON', type: 'number' },
+      { key: 'rcon.password', label: 'Password RCON', type: 'text' },
+      { key: 'log-ips', label: 'Registra Indirizzi IP nei Log', type: 'boolean' },
+      { key: 'op-permission-level', label: 'Livello Permessi Operatori OP', type: 'range', min: 1, max: 4 },
+    ],
+  },
 };
-
-const RANGE_PROPERTIES: Record<string, { default: number, min: number, max: number, unit?: string }> = {
-  'max-players': { default: 20, min: 1, max: 1000, unit: ' players' },
-  'view-distance': { default: 10, min: 3, max: 32, unit: ' chunks' },
-  'simulation-distance': { default: 10, min: 3, max: 32, unit: ' chunks' },
-  'max-tick-time': { default: 60000, min: -1, max: 2147483647, unit: ' ms' },
-  'network-compression-threshold': { default: 256, min: -1, max: 2147483647, unit: ' bytes' }
-};
-
-const NUMBER_PROPERTIES = [
-  'server-port', 'query.port', 'rcon.port', 'max-world-size', 
-  'player-idle-timeout', 'rate-limit', 'function-permission-level',
-  'op-permission-level', 'max-chained-neighbor-updates',
-  'entity-broadcast-range-percentage'
-];
-
-// Definizione di tutte le proprietà (oltre 70) con categoria e tipo
-const PROPERTIES_SCHEMA = [
-  { key: 'motd', label: 'Messaggio del server', type: 'text', category: 'Generale' },
-  { key: 'max-players', label: 'Max giocatori', type: 'number', category: 'Giocatori' },
-  { key: 'difficulty', label: 'Difficoltà', type: 'select', options: ['peaceful', 'easy', 'normal', 'hard'], category: 'Gameplay' },
-  { key: 'gamemode', label: 'Game mode', type: 'select', options: ['survival', 'creative', 'adventure', 'spectator'], category: 'Gameplay' },
-  { key: 'online-mode', label: 'Online mode (Premium)', type: 'boolean', category: 'Sicurezza' },
-  { key: 'pvp', label: 'PvP', type: 'boolean', category: 'Gameplay' },
-  { key: 'white-list', label: 'Whitelist', type: 'boolean', category: 'Sicurezza' },
-  { key: 'hardcore', label: 'Hardcore', type: 'boolean', category: 'Gameplay' },
-  { key: 'allow-nether', label: 'Nether', type: 'boolean', category: 'Dimensioni' },
-  { key: 'spawn-monsters', label: 'Mostri', type: 'boolean', category: 'Gameplay' },
-  { key: 'enable-command-block', label: 'Command block', type: 'boolean', category: 'Funzioni' },
-  { key: 'enable-rcon', label: 'RCON', type: 'boolean', category: 'Funzioni' },
-  { key: 'rcon.port', label: 'Porta RCON', type: 'number', category: 'Funzioni' },
-  { key: 'rcon.password', label: 'Password RCON', type: 'text', category: 'Funzioni' },
-  { key: 'view-distance', label: 'Distanza vista', type: 'number', category: 'Performance' },
-  { key: 'simulation-distance', label: 'Distanza simulazione', type: 'number', category: 'Performance' },
-  { key: 'max-tick-time', label: 'Max tick time (ms)', type: 'number', category: 'Performance' },
-  { key: 'allow-flight', label: 'Volo', type: 'boolean', category: 'Gameplay' },
-  { key: 'enforce-secure-profile', label: 'Profilo sicuro', type: 'boolean', category: 'Sicurezza' },
-  { key: 'enforce-whitelist', label: 'Forza whitelist', type: 'boolean', category: 'Sicurezza' },
-  { key: 'entity-broadcast-range-percentage', label: 'Range entità %', type: 'number', category: 'Performance' },
-  { key: 'force-gamemode', label: 'Forza gamemode', type: 'boolean', category: 'Gameplay' },
-  { key: 'function-permission-level', label: 'Livello permessi funzioni', type: 'number', category: 'Amministrazione' },
-  { key: 'generate-structures', label: 'Genera strutture', type: 'boolean', category: 'Mondo' },
-  { key: 'hardcore', label: 'Hardcore', type: 'boolean', category: 'Gameplay' },
-  { key: 'hide-online-players', label: 'Nascondi giocatori online', type: 'boolean', category: 'Privacy' },
-  { key: 'level-name', label: 'Nome del mondo', type: 'text', category: 'Mondo' },
-  { key: 'level-seed', label: 'Seed del mondo', type: 'text', category: 'Mondo' },
-  { key: 'level-type', label: 'Tipo di mondo', type: 'select', options: ['minecraft:normal', 'minecraft:flat', 'minecraft:large_biomes', 'minecraft:amplified', 'minecraft:single_biome_surface'], category: 'Mondo' },
-  { key: 'log-ips', label: 'Log IP', type: 'boolean', category: 'Logging' },
-  { key: 'max-chained-neighbor-updates', label: 'Max aggiornamenti vicini', type: 'number', category: 'Performance' },
-  { key: 'max-world-size', label: 'Dimensione massima mondo', type: 'number', category: 'Mondo' },
-  { key: 'network-compression-threshold', label: 'Soglia compressione rete', type: 'number', category: 'Rete' },
-  { key: 'op-permission-level', label: 'Livello permessi OP', type: 'number', category: 'Amministrazione' },
-  { key: 'pause-when-empty-seconds', label: 'Pausa se vuoto (sec)', type: 'number', category: 'Performance' },
-  { key: 'player-idle-timeout', label: 'Timeout inattività (min)', type: 'number', category: 'Giocatori' },
-  { key: 'prevent-proxy-connections', label: 'Previeni connessioni proxy', type: 'boolean', category: 'Sicurezza' },
-  { key: 'query.port', label: 'Porta query', type: 'number', category: 'Rete' },
-  { key: 'rate-limit', label: 'Rate limit', type: 'number', category: 'Rete' },
-  { key: 'region-file-compression', label: 'Compressione regioni', type: 'select', options: ['deflate', 'none'], category: 'Performance' },
-  { key: 'require-resource-pack', label: 'Richiedi resource pack', type: 'boolean', category: 'Risorse' },
-  { key: 'resource-pack', label: 'URL resource pack', type: 'text', category: 'Risorse' },
-  { key: 'server-port', label: 'Porta server', type: 'number', category: 'Rete' },
-  { key: 'spawn-protection', label: 'Protezione spawn (raggio)', type: 'number', category: 'Protezione' },
-  { key: 'sync-chunk-writes', label: 'Scrittura chunk sincrona', type: 'boolean', category: 'Performance' },
-  { key: 'use-native-transport', label: 'Trasporto nativo', type: 'boolean', category: 'Rete' },
-];
-
-// Raggruppa per categoria
-const groupedProperties = PROPERTIES_SCHEMA.reduce((acc, prop) => {
-  if (!acc[prop.category]) acc[prop.category] = [];
-  acc[prop.category].push(prop);
-  return acc;
-}, {} as Record<string, typeof PROPERTIES_SCHEMA>);
 
 const API_BASE = '/api/orchestrator';
 
-// Default server.properties configuration
-const defaultServerProperties: Record<string, string> = {
-  'accepts-transfers': 'false',
-  'allow-flight': 'false',
-  'allow-nether': 'true',
-  'broadcast-console-to-ops': 'true',
-  'broadcast-rcon-to-ops': 'true',
-  'bug-report-link': '',
-  'difficulty': 'easy',
-  'enable-command-block': 'false',
-  'enable-jmx-monitoring': 'false',
-  'enable-query': 'false',
-  'enable-rcon': 'false',
-  'enable-status': 'true',
-  'enforce-secure-profile': 'true',
-  'enforce-whitelist': 'false',
-  'entity-broadcast-range-percentage': '100',
-  'force-gamemode': 'false',
-  'function-permission-level': '2',
-  'gamemode': 'survival',
-  'generate-structures': 'true',
-  'generator-settings': '{}',
-  'hardcore': 'false',
-  'hide-online-players': 'false',
-  'initial-disabled-packs': '',
-  'initial-enabled-packs': 'vanilla',
-  'level-name': 'world',
-  'level-seed': '',
-  'level-type': 'minecraft\\:normal',
-  'log-ips': 'true',
-  'max-chained-neighbor-updates': '1000000',
-  'max-players': '20',
-  'max-tick-time': '60000',
-  'max-world-size': '29999984',
-  'motd': 'A Minecraft Server',
-  'network-compression-threshold': '256',
-  'online-mode': 'true',
-  'op-permission-level': '4',
-  'pause-when-empty-seconds': '60',
-  'player-idle-timeout': '0',
-  'prevent-proxy-connections': 'false',
-  'pvp': 'true',
-  'query.port': '25565',
-  'rate-limit': '0',
-  'rcon.password': '',
-  'rcon.port': '25575',
-  'region-file-compression': 'deflate',
-  'require-resource-pack': 'false',
-  'resource-pack': '',
-  'resource-pack-id': '',
-  'resource-pack-prompt': '',
-  'resource-pack-sha1': '',
-  'server-ip': '',
-  'server-port': '25565',
-  'simulation-distance': '10',
-  'spawn-monsters': 'true',
-  'spawn-protection': '16',
-  'sync-chunk-writes': 'true',
-  'text-filtering-config': '',
-  'text-filtering-version': '0',
-  'use-native-transport': 'true',
-  'view-distance': '10',
-  'white-list': 'false',
-};
+type ActiveTab = 'overview' | 'console' | 'config' | 'players' | 'files' | 'share';
 
-// UI Components
-function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange: (val: boolean) => void; label: string }) {
-  return (
-    <div className="flex items-center justify-between py-2">
-      <span className="text-sm text-zinc-300">{label}</span>
-      <button
-        type="button"
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-          checked ? 'bg-green-600' : 'bg-zinc-600'
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-            checked ? 'translate-x-6' : 'translate-x-1'
-          }`}
-        />
-      </button>
-    </div>
-  );
-}
-
-function DropdownSelect({ value, options, onChange, label }: { value: string; options: string[]; onChange: (val: string) => void; label: string }) {
-  return (
-    <div className="py-2">
-      <label className="block text-sm text-zinc-300 mb-1">{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-      >
-        {options.map(opt => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function RangeSlider({ value, min, max, onChange, label, unit }: { value: number; min: number; max: number; onChange: (val: number) => void; label: string; unit?: string }) {
-  return (
-    <div className="py-2">
-      <div className="flex justify-between items-center mb-1">
-        <label className="text-sm text-zinc-300">{label}</label>
-        <span className="text-sm text-blue-400 font-medium">{value}{unit ? ` ${unit}` : ''}</span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-      />
-      <div className="flex justify-between text-xs text-zinc-500 mt-1">
-        <span>{min}</span>
-        <span>{max}</span>
-      </div>
-    </div>
-  );
-}
-
-function NumberInput({ value, onChange, label }: { value: number; onChange: (val: number) => void; label: string }) {
-  return (
-    <div className="py-2">
-      <label className="block text-sm text-zinc-300 mb-1">{label}</label>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value) || 0)}
-        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-      />
-    </div>
-  );
-}
-
-function TextInput({ value, onChange, label }: { value: string; onChange: (val: string) => void; label: string }) {
-  return (
-    <div className="py-2">
-      <label className="block text-sm text-zinc-300 mb-1">{label}</label>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-      />
-    </div>
-  );
-}
-
-// Inner component that uses useSearchParams
-function ServerManagementInner() {
+function ServerManagementContent() {
   const searchParams = useSearchParams();
-  const urlServerId = searchParams?.get('serverId') ?? null;
-  
-  const [serverId, setServerId] = useState(urlServerId || '');
-  const [properties, setProperties] = useState<ServerProperties>(defaultServerProperties);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
+  const serverId = searchParams?.get('serverId') || searchParams?.get('id') || '';
+  const router = useRouter();
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
+  const [server, setServer] = useState<ServerDetails | null>(null);
+  const [properties, setProperties] = useState<ServerProperties>({});
+  const [originalProperties, setOriginalProperties] = useState<ServerProperties>({});
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [savingProperties, setSavingProperties] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [servers, setServers] = useState<string[]>([]);
-  const [selectedServers, setSelectedServers] = useState<string[]>([]);
-  
-  // Whitelist management state
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [propertiesSearch, setPropertiesSearch] = useState('');
+
+  // Whitelist state
   const [whitelist, setWhitelist] = useState<{ uuid: string; name: string }[]>([]);
   const [newPlayerName, setNewPlayerName] = useState('');
   const [isWhitelistLoading, setIsWhitelistLoading] = useState(false);
 
-  // Mod management state
+  // Mod & File state
   const [modFiles, setModFiles] = useState<File[]>([]);
   const [isModUploading, setIsModUploading] = useState(false);
   const [uploadResults, setUploadResults] = useState<{ file: string; status: string; reason?: string }[]>([]);
-  const [mcType, setMcType] = useState<string | null>(null);
 
-  // Share management state
-  const [shareToken, setShareToken] = useState<string | null>(null);
-  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  // Share Modal State
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-  // Load properties and whitelist when serverId changes
+  // Live Console & Stats WebSocket state
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const term = useRef<any>(null);
+  const fitAddon = useRef<any>(null);
+  const consoleSocket = useRef<Socket | null>(null);
+  const [command, setCommand] = useState('');
+  const [stats, setStats] = useState({ cpu: 0, ram: 0 });
+  const [isConsoleConnected, setIsConsoleConnected] = useState(false);
+
+  // Load user from session
   useEffect(() => {
-    if (!serverId) return;
-    
-    const loadData = async () => {
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const token = localStorage.getItem('token');
-        const headers = { 'Authorization': `Bearer ${token}` };
+    const u = getUser();
+    if (u) {
+      setCurrentUser(u);
+    }
+  }, []);
 
-        // Load Properties
-        const propRes = await fetch(`${API_BASE}/properties?serverId=${encodeURIComponent(serverId)}`, { headers });
-        if (propRes.ok) {
-          const propData = await propRes.json();
-        
+  // Fetch Server Details & Properties
+  const loadServerData = async () => {
+    if (!serverId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const token = getToken();
+      if (!token) {
+        clearSession();
+        window.location.href = `/login?redirect=${encodeURIComponent(`/server-management?id=${serverId}`)}`;
+        return;
+      }
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // 1. Get server details from list
+      const serversRes = await fetch(`${API_BASE}/servers`, { headers });
+      if (serversRes.status === 401) {
+        clearSession();
+        window.location.href = `/login?expired=true&redirect=${encodeURIComponent(`/server-management?id=${serverId}`)}`;
+        return;
+      }
+      if (serversRes.ok) {
+        const serversList: ServerDetails[] = await serversRes.json();
+        const found = Array.isArray(serversList) ? serversList.find((s) => s.id === serverId) : null;
+        if (found) {
+          setServer(found);
+        } else {
+          setError('Server non trovato o accesso negato');
+        }
+      }
+
+      // 2. Get properties
+      const propRes = await fetch(`${API_BASE}/properties?serverId=${encodeURIComponent(serverId)}`, { headers });
+      if (propRes.ok) {
+        const propData = await propRes.json();
         if (propData.properties) {
           setProperties(propData.properties);
+          setOriginalProperties(propData.properties);
         }
-        if (propData.mcType) {
-          setMcType(propData.mcType);
-        } 
-          setIsRunning(propData.isRunning || false);
-        }
-
-        // Load Whitelist
-        const whiteRes = await fetch(`${API_BASE}/players/${serverId}/whitelist`, { headers });
-        if (whiteRes.ok) {
-          const data = await whiteRes.json();
-          setWhitelist(data);
-        }
-
-      } catch (err: any) {
-        console.error('Error loading server data:', err);
-        setError(err.message || 'Errore nel caricamento dei dati');
-      } finally {
-        setIsLoading(false);
       }
-    };
 
-    loadData();
+      // 3. Get whitelist
+      const whiteRes = await fetch(`${API_BASE}/players/${serverId}/whitelist`, { headers });
+      if (whiteRes.ok) {
+        const data = await whiteRes.json();
+        setWhitelist(Array.isArray(data) ? data : []);
+      }
+    } catch (err: any) {
+      console.error('Error loading server data:', err);
+      setError('Errore di comunicazione con il backend');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadServerData();
   }, [serverId]);
 
+  // Periodic status refresh
+  useEffect(() => {
+    if (!serverId) return;
+    const interval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE}/status?serverId=${serverId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setServer((prev) => (prev ? { ...prev, status: data.status } : prev));
+        }
+      } catch {
+        // quiet error on poll
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [serverId]);
+
+  // Determine user role
+  const getUserRole = (): 'OWNER' | 'MANAGER' | 'OPERATOR' => {
+    if (!currentUser || !server) return 'OPERATOR';
+    if (server.owner_id === currentUser.id || currentUser.role === 'SUPERADMIN') {
+      return 'OWNER';
+    }
+    const collab = server.collaborators?.find(
+      (c) => c.user_id === currentUser.id || c.user?.id === currentUser.id
+    );
+    if (collab) {
+      if (collab.role === 'MANAGER' || collab.user?.plan?.can_edit_shared_servers) {
+        return 'MANAGER';
+      }
+      return 'OPERATOR';
+    }
+    return 'OPERATOR';
+  };
+
+  const userRole = getUserRole();
+  const isOperator = userRole === 'OPERATOR';
+  const isManagerOrOwner = userRole === 'MANAGER' || userRole === 'OWNER';
+
+  // Live Console setup when activeTab === 'console'
+  useEffect(() => {
+    if (activeTab !== 'console' || !serverId) {
+      if (consoleSocket.current) {
+        consoleSocket.current.disconnect();
+        consoleSocket.current = null;
+      }
+      if (term.current) {
+        term.current.dispose();
+        term.current = null;
+      }
+      return;
+    }
+
+    let isDisposed = false;
+
+    Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]).then(
+      ([{ Terminal }, { FitAddon }]) => {
+        if (isDisposed || !terminalRef.current) return;
+
+        term.current = new Terminal({
+          theme: {
+            background: '#09090b',
+            foreground: '#e4e4e7',
+            cursor: '#10b981',
+            selectionBackground: '#10b98133',
+          },
+          fontFamily: 'monospace',
+          fontSize: 13,
+          convertEol: true,
+          cursorBlink: true,
+        });
+
+        fitAddon.current = new FitAddon();
+        term.current.loadAddon(fitAddon.current);
+        term.current.open(terminalRef.current);
+        fitAddon.current.fit();
+
+        const host = window.location.hostname;
+        const socket = io(`ws://${host}:3005/console`, {
+          transports: ['websocket'],
+        });
+        consoleSocket.current = socket;
+
+        const token = localStorage.getItem('token');
+
+        socket.on('connect', () => {
+          setIsConsoleConnected(true);
+          term.current?.writeln('\x1b[32m[OpenHostMC] Connesso al WebSocket del server.\x1b[0m');
+          socket.emit('join-console', { serverId, token });
+        });
+
+        socket.on('console-log', (data: string) => {
+          term.current?.write(data);
+        });
+
+        socket.on('console-error', (err: string) => {
+          term.current?.writeln(`\x1b[31m[Errore Console] ${err}\x1b[0m`);
+        });
+
+        socket.on('stats', (data: { cpu: number; ram: number }) => {
+          setStats(data);
+        });
+
+        socket.on('disconnect', () => {
+          setIsConsoleConnected(false);
+          term.current?.writeln('\x1b[31m[OpenHostMC] Disconnesso dal WebSocket.\x1b[0m');
+        });
+
+        const handleResize = () => fitAddon.current?.fit();
+        window.addEventListener('resize', handleResize);
+      }
+    );
+
+    return () => {
+      isDisposed = true;
+      if (consoleSocket.current) {
+        consoleSocket.current.disconnect();
+        consoleSocket.current = null;
+      }
+      if (term.current) {
+        term.current.dispose();
+        term.current = null;
+      }
+    };
+  }, [activeTab, serverId]);
+
+  const handleSendCommand = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!command.trim() || !consoleSocket.current || !serverId) return;
+    if (isOperator) {
+      alert('Il tuo ruolo attuale (Operatore) consente solo la visualizzazione della console.');
+      return;
+    }
+    const token = localStorage.getItem('token');
+    consoleSocket.current.emit('send-command', { serverId, command: command.trim(), token });
+    term.current?.writeln(`\x1b[36m> ${command.trim()}\x1b[0m`);
+    setCommand('');
+  };
+
+  // Start / Restart / Stop Handlers
+  const handleStart = async () => {
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/start/${serverId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setServer((prev) => (prev ? { ...prev, status: 'STARTING' } : prev));
+      } else {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.details || d.error || 'Errore avvio server');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRestart = async () => {
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/restart/${serverId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setServer((prev) => (prev ? { ...prev, status: 'STARTING' } : prev));
+      } else {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.details || d.error || 'Errore riavvio server');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleStop = async () => {
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/stop/${serverId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setServer((prev) => (prev ? { ...prev, status: 'STOPPING' } : prev));
+      } else {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.message || 'Errore arresto server');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Property Changes
+  const handlePropertyChange = (key: string, value: string) => {
+    if (isOperator) return;
+    setProperties((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveProperties = async () => {
+    if (isOperator) return;
+    setSavingProperties(true);
+    setError(null);
+    setSaveSuccess(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/properties`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ serverId, properties }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Errore nel salvataggio');
+
+      setOriginalProperties(properties);
+      setSaveSuccess(
+        data.writtenToContainer
+          ? 'Proprietà salvate e container riavviato automaticamente.'
+          : 'Proprietà salvate con successo su disco.'
+      );
+      setTimeout(() => setSaveSuccess(null), 4000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingProperties(false);
+    }
+  };
+
+  // Whitelist Handlers
   const handleAddPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPlayerName.trim()) return;
-    
+    if (!newPlayerName.trim() || isOperator) return;
     setIsWhitelistLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/players/${serverId}/whitelist`, {
+      const res = await fetch(`${API_BASE}/players/${serverId}/whitelist`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ playerName: newPlayerName.trim() }),
       });
-      
-      if (!response.ok) throw new Error('Errore aggiunta player');
-      
-      const result = await response.json();
-      setWhitelist([...whitelist, { uuid: result.uuid, name: result.playerName }]);
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || 'Errore aggiunta giocatore');
+      setWhitelist((prev) => [...prev, { uuid: result.uuid, name: result.playerName }]);
       setNewPlayerName('');
     } catch (err: any) {
       alert(err.message);
@@ -369,61 +544,42 @@ function ServerManagementInner() {
     }
   };
 
-  const handleRemovePlayer = async (playerName: string) => {
-    if (!confirm(`Rimuovere ${playerName} dalla whitelist?`)) return;
-    
+  const handleRemovePlayer = async (name: string) => {
+    if (isOperator) return;
+    if (!confirm(`Rimuovere ${name} dalla whitelist?`)) return;
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/players/${serverId}/whitelist/${playerName}`, {
+      const res = await fetch(`${API_BASE}/players/${serverId}/whitelist/${name}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
-      if (!response.ok) throw new Error('Errore rimozione player');
-      
-      setWhitelist(whitelist.filter(p => p.name !== playerName));
+      if (!res.ok) throw new Error('Errore rimozione giocatore');
+      setWhitelist((prev) => prev.filter((p) => p.name !== name));
     } catch (err: any) {
       alert(err.message);
     }
   };
 
+  // Upload mods
   const handleUploadMods = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (modFiles.length === 0) return;
-
+    if (modFiles.length === 0 || isOperator) return;
     setIsModUploading(true);
     setUploadResults([]);
-    
     try {
       const token = localStorage.getItem('token');
       const formData = new FormData();
-      
-      modFiles.forEach(file => {
-        formData.append('files', file);
-      });
+      modFiles.forEach((file) => formData.append('files', file));
 
-      const response = await fetch(`${API_BASE}/files/mods/upload-bulk/${serverId}`, {
+      const res = await fetch(`${API_BASE}/files/mods/upload-bulk/${serverId}`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.message || 'Errore caricamento mods');
-      }
-      
-      const results = await response.json();
+      const results = await res.json();
+      if (!res.ok) throw new Error(results.message || 'Errore caricamento mod');
       setUploadResults(results);
       setModFiles([]);
-      
-      // Reset input file if possible
-      const fileInput = document.getElementById('mod-upload-input') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
-      
-      alert('Caricamento completato!');
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -431,38 +587,14 @@ function ServerManagementInner() {
     }
   };
 
-  const handleDownloadMods = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/files/mods/export/${serverId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      
-      if (!response.ok) throw new Error('Nessuna mod trovata o errore nel download');
-      
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `mods_${serverId}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
-
   const handleExportWorld = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/files/world/export/${serverId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+      const res = await fetch(`${API_BASE}/files/world/export/${serverId}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
-      if (!response.ok) throw new Error('Nessun mondo trovato o errore nel download');
-      
-      const blob = await response.blob();
+      if (!res.ok) throw new Error('Errore download mondo');
+      const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -475,389 +607,751 @@ function ServerManagementInner() {
     }
   };
 
-  const handleSave = async () => {
-    if (!serverId) {
-      alert('Inserisci un ID server');
-      return;
-    }
-    
-    setIsLoading(true);
-    setError(null);
-    
+  const handleExportMods = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/properties`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ serverId, properties }),
+      const res = await fetch(`${API_BASE}/files/mods/export/${serverId}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.writtenToContainer) {
-        alert('Proprietà salvate. Il server è stato riavviato per applicare le modifiche.');
-      } else {
-        alert('Proprietà salvate con successo. Verranno applicate al prossimo avvio del server.');
-      }
+      if (!res.ok) throw new Error('Errore download mod');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mods_${serverId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
     } catch (err: any) {
-      console.error('Error saving properties:', err);
-      setError(err.message || 'Errore nel salvataggio delle proprietà');
-    } finally {
-      setIsLoading(false);
+      alert(err.message);
     }
   };
 
-  const handleChange = async (key: string, value: string) => {
-    // Special handling for whitelist toggle
-    if (key === 'white-list') {
-      try {
-        const token = localStorage.getItem('token');
-        const enabled = value === 'true';
-        const response = await fetch(`${API_BASE}/players/${serverId}/whitelist/toggle`, {
-          method: 'PATCH',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ enabled }),
-        });
-        
-        if (!response.ok) throw new Error('Errore toggle whitelist');
-        setProperties(prev => ({ ...prev, [key]: value }));
-        return;
-      } catch (err: any) {
-        alert(err.message);
-        return;
-      }
-    }
-
-    setProperties(prev => ({ ...prev, [key]: value }));
-  };
-
-  const loadServers = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/servers`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to load servers');
-      const data = await response.json();
-      setServers(data.map((s: any) => s.id));
-    } catch (error) {
-      console.error('Error loading servers:', error);
-      alert('Errore nel caricamento dei server');
-    }
-  };
-
-  const handleDelete = async () => {
-    if (selectedServers.length === 0) {
-      alert('Seleziona almeno un server da eliminare');
-      return;
-    }
-    if (!confirm(`Sei sicuro di voler eliminare ${selectedServers.length} server?`)) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/servers/bulk-delete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ serverIds: selectedServers }),
-      });
-      if (!response.ok) throw new Error('Failed to delete servers');
-      alert('Server eliminati con successo!');
-      setSelectedServers([]);
-      loadServers();
-    } catch (error) {
-      console.error('Error deleting servers:', error);
-      alert('Errore nell\'eliminazione dei server');
-    }
-  };
-
-  const generateShareLink = async () => {
-    setIsGeneratingLink(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/servers/${serverId}/share`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      if (!response.ok || data.error) throw new Error(data.error || 'Errore nella generazione del link');
-      setShareToken(data.token);
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Errore nella generazione del link');
-    } finally {
-      setIsGeneratingLink(false);
-    }
-  };
-
-  // Render property input based on type
-  const renderPropertyInput = (key: string) => {
-    const value = properties[key] || '';
-    
-    // Boolean properties - Toggle Switch
-    if (BOOLEAN_PROPERTIES.includes(key)) {
-      return (
-        <ToggleSwitch
-          checked={value === 'true'}
-          onChange={(checked) => handleChange(key, checked ? 'true' : 'false')}
-          label={key}
-        />
-      );
-    }
-    
-    // Enum properties - Dropdown
-    if (ENUM_PROPERTIES[key]) {
-      const config = ENUM_PROPERTIES[key];
-      return (
-        <DropdownSelect
-          value={value || config.default}
-          options={config.options}
-          onChange={(val) => handleChange(key, val)}
-          label={key}
-        />
-      );
-    }
-    
-    // Range properties - Slider
-    if (RANGE_PROPERTIES[key]) {
-      const config = RANGE_PROPERTIES[key];
-      return (
-        <RangeSlider
-          value={parseInt(value) || config.default}
-          min={config.min}
-          max={config.max}
-          onChange={(val) => handleChange(key, val.toString())}
-          label={key}
-          unit={config.unit}
-        />
-      );
-    }
-    
-    // Number properties - Number Input
-    if (NUMBER_PROPERTIES.includes(key)) {
-      return (
-        <NumberInput
-          value={parseInt(value) || 0}
-          onChange={(val) => handleChange(key, val.toString())}
-          label={key}
-        />
-      );
-    }
-    
-    // Default - Text Input
+  if (!serverId) {
     return (
-      <TextInput
-        value={value}
-        onChange={(val) => handleChange(key, val)}
-        label={key}
-      />
-    );
-  };
-
-  // Priority groups for organizing properties
-  const priorityGroups = [
-    {
-      title: 'Generale',
-      keys: ['motd', 'max-players', 'difficulty', 'gamemode', 'hardcore', 'online-mode', 'pvp']
-    },
-    {
-      title: 'Mondo',
-      keys: ['level-name', 'level-seed', 'level-type', 'generate-structures', 'allow-nether', 'generator-settings']
-    },
-    {
-      title: 'Rete',
-      keys: ['server-ip', 'server-port', 'view-distance', 'simulation-distance', 'network-compression-threshold', 'use-native-transport', 'prevent-proxy-connections']
-    },
-    {
-      title: 'Giocatori',
-      keys: ['white-list', 'enforce-whitelist', 'spawn-protection', 'player-idle-timeout', 'allow-flight', 'op-permission-level']
-    },
-    {
-      title: 'Sicurezza & Moderazione',
-      keys: ['enforce-secure-profile', 'log-ips', 'rate-limit', 'hide-online-players', 'accepts-transfers']
-    },
-    {
-      title: 'Avanzate',
-      keys: ['enable-command-block', 'function-permission-level', 'force-gamemode', 'spawn-monsters', 'entity-broadcast-range-percentage', 'max-world-size', 'max-tick-time', 'max-chained-neighbor-updates', 'sync-chunk-writes', 'pause-when-empty-seconds', 'region-file-compression']
-    },
-    {
-      title: 'RCON & Query',
-      keys: ['enable-rcon', 'rcon.port', 'rcon.password', 'enable-query', 'query.port']
-    },
-    {
-      title: 'Resource Pack',
-      keys: ['resource-pack', 'resource-pack-id', 'resource-pack-sha1', 'resource-pack-prompt', 'require-resource-pack']
-    }
-  ];
-
-  return (
-    <div className="min-h-screen bg-zinc-950 text-white p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold">Gestione Server Minecraft</h1>
-          <Link 
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+          <h2 className="text-xl font-bold text-white">ID Server Mancante</h2>
+          <p className="text-sm text-zinc-400">Nessun identificatore di server fornito nell'URL.</p>
+          <Link
             href="/dashboard"
-            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition-colors"
           >
-            ← Torna alla Dashboard
+            <span>Torna alla Dashboard</span>
+            <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
+      </div>
+    );
+  }
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-900/50 border border-red-700 rounded-lg">
-            <p className="text-red-200">{error}</p>
-          </div>
-        )}
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin mx-auto" />
+          <p className="text-sm text-zinc-400">Caricamento impostazioni server...</p>
+        </div>
+      </div>
+    );
+  }
 
-        {/* BUG-006 FIX: ID Server ora in sola lettura come testo statico */}
-        <div className="mb-6 p-4 bg-zinc-900 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">ID Server</label>
-              {serverId ? (
-                <p className="font-mono text-sm text-zinc-300">{serverId}</p>
-              ) : (
-                <p className="text-sm text-red-400">Nessun server selezionato</p>
-              )}
+  const isRunning = server?.status === 'RUNNING';
+  const isStopped = server?.status === 'STOPPED' || server?.status === 'CREATED';
+  const hasModifiedProperties = JSON.stringify(properties) !== JSON.stringify(originalProperties);
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+      {/* Top Navbar */}
+      <header className="bg-zinc-900/80 border-b border-zinc-800 sticky top-0 z-30 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="text-xs font-medium text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors"
+            >
+              <span>← Dashboard</span>
+            </Link>
+            <span className="text-zinc-600">/</span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-white text-sm sm:text-base">{server?.name || 'Server'}</span>
+              <span className="text-xs font-mono text-zinc-500 hidden sm:inline">({serverId.slice(0, 8)}...)</span>
             </div>
-            {isRunning && (
-              <span className="px-3 py-1 bg-green-900/50 text-green-400 text-sm rounded-full">
-                ● Server in esecuzione
-              </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Quick Share Button */}
+            <button
+              onClick={() => setIsShareModalOpen(true)}
+              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Share2 className="w-3.5 h-3.5 text-purple-400" />
+              <span>Condividi</span>
+            </button>
+
+            {/* Quick Power Controls */}
+            {isStopped ? (
+              <button
+                onClick={handleStart}
+                disabled={actionLoading}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Avvia Server</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={handleRestart}
+                  disabled={actionLoading}
+                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-1.5 cursor-pointer"
+                  title="Riavvia"
+                >
+                  <RotateCw className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="hidden sm:inline">Riavvia</span>
+                </button>
+                <button
+                  onClick={handleStop}
+                  disabled={actionLoading}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Arresta"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span className="hidden sm:inline">Arresta</span>
+                </button>
+              </>
             )}
           </div>
-          {!serverId && (
-            <div className="mt-4 p-3 bg-red-900/30 border border-red-700 rounded">
-              <p className="text-red-300 text-sm">
-                ERRORE: Nessun serverId trovato nell&apos;URL. 
-                <Link href="/dashboard" className="underline ml-1">Torna alla dashboard</Link>
-              </p>
-            </div>
-          )}
         </div>
+      </header>
 
-        {/* Share Server Management */}
-        {!isLoading && serverId && (
-          <div className="mb-8 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl">
-            <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
-              <div>
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  🤝 Condivisione Server
-                </h3>
-                <p className="text-zinc-400 text-sm">Crea un link per invitare altri utenti a gestire o visualizzare il server</p>
+      {/* Operator Banner (if user has OPERATOR role) */}
+      {isOperator && (
+        <div className="bg-blue-950/40 border-b border-blue-900/50 px-4 sm:px-8 py-3">
+          <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-blue-300">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-400 shrink-0" />
+              <span>
+                <strong>Ruolo: Operatore</strong> — Hai i permessi per visualizzare lo stato, consultare la console, avviare e riavviare il server.
+              </span>
+            </div>
+            <span className="hidden md:inline px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px]">
+              Sola Lettura / Controllo Rapido
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Global Alerts */}
+      {error && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 w-full">
+          <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-300 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-200 font-bold ml-2 p-1">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {saveSuccess && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 w-full">
+          <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-300 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{saveSuccess}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Tabs Navigation Header */}
+      <div className="border-b border-zinc-800 bg-zinc-900/40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 sm:gap-2 overflow-x-auto py-2.5">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'overview'
+                ? 'bg-zinc-800 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Activity className="w-4 h-4 text-emerald-400" />
+            <span>Panoramica</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('console')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'console'
+                ? 'bg-zinc-800 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Terminal className="w-4 h-4 text-blue-400" />
+            <span>Console Live</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('config')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'config'
+                ? 'bg-zinc-800 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Sliders className="w-4 h-4 text-amber-400" />
+            <span>Configurazione</span>
+            {isOperator && <Lock className="w-3 h-3 text-zinc-500" />}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('players')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'players'
+                ? 'bg-zinc-800 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Users className="w-4 h-4 text-purple-400" />
+            <span>Giocatori & Whitelist</span>
+            {isOperator && <Lock className="w-3 h-3 text-zinc-500" />}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('files')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'files'
+                ? 'bg-zinc-800 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <FolderTree className="w-4 h-4 text-emerald-400" />
+            <span>Mod & File</span>
+            {isOperator && <Lock className="w-3 h-3 text-zinc-500" />}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('share')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === 'share'
+                ? 'bg-zinc-800 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <Share2 className="w-4 h-4 text-purple-400" />
+            <span>Condivisione & Team</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Tab Contents */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+        {/* TAB 1: PANORAMICA */}
+        {activeTab === 'overview' && server && (
+          <div className="space-y-6 animate-in fade-in duration-150">
+            {/* Server Identity Card */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-inner shrink-0">
+                  <Server className="w-7 h-7" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-bold text-white">{server.name}</h2>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
+                      {server.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 font-mono mt-1">
+                    Indirizzo: <span className="text-zinc-200 select-all font-semibold">{server.subdomain || server.name}.openhostmc.net{server.port ? `:${server.port}` : ''}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={handleStart}
+                  disabled={actionLoading || isRunning}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer shadow-md shadow-emerald-950/20"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>Avvia</span>
+                </button>
+                <button
+                  onClick={handleRestart}
+                  disabled={actionLoading || isStopped}
+                  className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800/40 disabled:text-zinc-600 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-2 cursor-pointer"
+                >
+                  <RotateCw className="w-4 h-4 text-blue-400" />
+                  <span>Riavvia</span>
+                </button>
+                <button
+                  onClick={handleStop}
+                  disabled={actionLoading || isStopped}
+                  className="px-4 py-2.5 bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 disabled:bg-zinc-800/40 disabled:text-zinc-600 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-2 cursor-pointer"
+                >
+                  <Square className="w-4 h-4 fill-current text-red-400" />
+                  <span>Arresta</span>
+                </button>
               </div>
             </div>
-            
-            <div className="p-6">
-              <div className="bg-blue-900/20 border border-blue-800/50 p-4 rounded-lg mb-4 text-sm text-blue-200">
-                <strong>Nota:</strong> Gli utenti che accettano l'invito potranno avviare il server. Inoltre, se il loro piano (tier) lo consente, potranno anche modificare le impostazioni.
-              </div>
-              
-              {!shareToken ? (
-                <button 
-                  onClick={generateShareLink}
-                  disabled={isGeneratingLink}
-                  className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 px-6 py-2 rounded-lg font-bold transition-all flex items-center gap-2"
-                >
-                  {isGeneratingLink ? 'Generazione...' : 'Genera Link di Condivisione'}
-                </button>
-              ) : (
-                <div className="flex gap-2 items-center">
-                  <input 
-                    type="text" 
-                    readOnly
-                    value={`${window.location.origin}/share/${shareToken}`}
-                    className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 outline-none text-zinc-300"
-                  />
-                  <button 
-                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}/share/${shareToken}`)}
-                    className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg font-bold transition-all"
-                  >
-                    Copia Link
-                  </button>
+
+            {/* Hardware & Spec Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-2">
+                <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <HardDrive className="w-4 h-4 text-emerald-400" />
+                    Allocazione RAM
+                  </span>
+                  <span className="text-[11px] font-mono text-zinc-500">Dedicata</span>
                 </div>
-              )}
+                <div className="text-2xl font-bold text-white">
+                  {(server.allocated_ram_mb ? server.allocated_ram_mb / 1024 : 2).toFixed(1)} GB
+                </div>
+                <div className="text-[11px] text-zinc-500">Memoria heap JVM isolata</div>
+              </div>
+
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-2">
+                <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Cpu className="w-4 h-4 text-blue-400" />
+                    Core CPU
+                  </span>
+                  <span className="text-[11px] font-mono text-zinc-500">Docker limit</span>
+                </div>
+                <div className="text-2xl font-bold text-white">
+                  {server.allocated_cpu_cores || 1.0} Cores
+                </div>
+                <div className="text-[11px] text-zinc-500">Thread dedicati con CFS pool</div>
+              </div>
+
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-2">
+                <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-purple-400" />
+                    Piattaforma
+                  </span>
+                  <span className="text-[11px] font-mono text-zinc-500">Versione</span>
+                </div>
+                <div className="text-2xl font-bold text-white truncate">
+                  {server.mc_type}
+                </div>
+                <div className="text-[11px] text-zinc-500 font-mono">Minecraft {server.mc_version}</div>
+              </div>
+
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-2">
+                <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Globe className="w-4 h-4 text-amber-400" />
+                    Porta Rete
+                  </span>
+                  <span className="text-[11px] font-mono text-zinc-500">TCP</span>
+                </div>
+                <div className="text-2xl font-mono font-bold text-white">
+                  {server.port ? `:${server.port}` : 'Allocata all\'avvio'}
+                </div>
+                <div className="text-[11px] text-zinc-500">Protocollo Minecraft standard</div>
+              </div>
+            </div>
+
+            {/* Quick shortcuts grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              <button
+                onClick={() => setActiveTab('console')}
+                className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-5 rounded-2xl text-left transition-all space-y-2 cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-105 transition-transform">
+                  <Terminal className="w-4 h-4" />
+                </div>
+                <div className="font-bold text-white text-sm">Console Live & RCON</div>
+                <p className="text-xs text-zinc-400">Monitora i log del server in tempo reale e invia comandi amministrativi.</p>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('config')}
+                className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-5 rounded-2xl text-left transition-all space-y-2 cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-105 transition-transform">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <div className="font-bold text-white text-sm flex items-center gap-1.5">
+                  <span>Opzioni Configurazione</span>
+                  {isOperator && <Lock className="w-3.5 h-3.5 text-zinc-500" />}
+                </div>
+                <p className="text-xs text-zinc-400">Personalizza difficoltà, gamemode, PvP, visuale e parametri server.properties.</p>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('share')}
+                className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-5 rounded-2xl text-left transition-all space-y-2 cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-transform">
+                  <Share2 className="w-4 h-4" />
+                </div>
+                <div className="font-bold text-white text-sm">Condividi con il Team</div>
+                <p className="text-xs text-zinc-400">Genera link di invito e assegna ruoli Manager o Operatore ai collaboratori.</p>
+              </button>
             </div>
           </div>
         )}
 
-        {/* Whitelist Management */}
-        {!isLoading && serverId && (
-          <div className="mb-8 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl">
-            <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
-              <div>
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  🛡️ Gestione Whitelist
-                </h3>
-                <p className="text-zinc-400 text-sm">Aggiungi o rimuovi utenti che possono accedere al server</p>
+        {/* TAB 2: CONSOLE LIVE */}
+        {activeTab === 'console' && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            {/* Console Toolbar */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                  <Terminal className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">Console WebSocket & RCON</h3>
+                  <div className="flex items-center gap-2 text-xs text-zinc-400">
+                    <span className={`w-2 h-2 rounded-full ${isConsoleConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                    <span>{isConsoleConnected ? 'Connesso' : 'Disconnesso'}</span>
+                  </div>
+                </div>
               </div>
-              <span className="px-3 py-1 bg-zinc-800 text-zinc-300 text-xs font-mono rounded-full border border-zinc-700">
-                whitelist.json
-              </span>
-            </div>
-            
-            <div className="p-6 space-y-6">
-              {/* Form Aggiunta */}
-              <form onSubmit={handleAddPlayer} className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={newPlayerName}
-                  onChange={(e) => setNewPlayerName(e.target.value)}
-                  placeholder="Nome utente Minecraft (es. Steve)"
-                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                  disabled={isWhitelistLoading}
-                />
-                <button 
-                  type="submit"
-                  disabled={isWhitelistLoading || !newPlayerName.trim()}
-                  className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 px-6 py-2 rounded-lg font-bold transition-all flex items-center gap-2"
-                >
-                  {isWhitelistLoading ? (
-                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  ) : '＋ Aggiungi'}
-                </button>
-              </form>
 
-              {/* Lista Player */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {/* Resource stats from socket */}
+              <div className="flex items-center gap-6 text-xs">
+                <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center">
+                  <span className="text-zinc-500 block text-[10px] uppercase font-semibold">CPU Container</span>
+                  <span className="font-mono font-bold text-blue-400">{stats.cpu}%</span>
+                </div>
+                <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center">
+                  <span className="text-zinc-500 block text-[10px] uppercase font-semibold">RAM Utilizzata</span>
+                  <span className="font-mono font-bold text-emerald-400">{stats.ram} MB</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Terminal View */}
+            <div className="bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden shadow-2xl relative min-h-[460px]">
+              <div ref={terminalRef} className="absolute inset-0 p-3" />
+            </div>
+
+            {/* Command input form */}
+            <form onSubmit={handleSendCommand} className="flex gap-2">
+              <input
+                type="text"
+                value={command}
+                onChange={(e) => setCommand(e.target.value)}
+                placeholder={
+                  isOperator
+                    ? 'Invio comandi RCON disabilitato per il ruolo Operatore (sola visualizzazione log)'
+                    : 'Inserisci un comando Minecraft (es. help, list, op Steve, say Buongiorno)...'
+                }
+                disabled={isOperator}
+                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 outline-none focus:border-blue-500 text-xs font-mono text-zinc-100 placeholder-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <button
+                type="submit"
+                disabled={isOperator || !command.trim()}
+                className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-6 py-3 rounded-xl font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Invia</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* TAB 3: CONFIGURAZIONE (server.properties) */}
+        {activeTab === 'config' && (
+          <div className="space-y-6 animate-in fade-in duration-150">
+            {isOperator && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-5 flex items-start gap-3.5 text-xs text-amber-300">
+                <Lock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-sm text-zinc-100">Modifiche Bloccate (Ruolo Operatore)</h4>
+                  <p className="text-zinc-400 leading-relaxed">
+                    Stai visualizzando le impostazioni attuali del file <code className="text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded">server.properties</code> in modalità di sola lettura. Per salvare modifiche è necessario il ruolo Manager o Proprietario.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Filter and search */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-amber-400" />
+                <h3 className="font-bold text-sm text-white">Parametri server.properties</h3>
+              </div>
+
+              <div className="relative max-w-xs w-full">
+                <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Cerca impostazione (es. pvp, motd, gamemode)..."
+                  value={propertiesSearch}
+                  onChange={(e) => setPropertiesSearch(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-4 py-2 text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-amber-500/50 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Property Categories */}
+            <div className="space-y-6">
+              {Object.entries(CATEGORIZED_PROPERTIES).map(([catKey, category]) => {
+                const filteredKeys = category.keys.filter(
+                  (item) =>
+                    item.label.toLowerCase().includes(propertiesSearch.toLowerCase()) ||
+                    item.key.toLowerCase().includes(propertiesSearch.toLowerCase())
+                );
+
+                if (filteredKeys.length === 0) return null;
+
+                return (
+                  <div key={catKey} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-lg">
+                    <div className="p-5 border-b border-zinc-800/80 bg-zinc-900/60">
+                      <h4 className="font-bold text-sm text-white">{category.title}</h4>
+                      <p className="text-xs text-zinc-400 mt-0.5">{category.description}</p>
+                    </div>
+
+                    <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {filteredKeys.map((item) => {
+                        const currentVal = properties[item.key] ?? '';
+
+                        return (
+                          <div
+                            key={item.key}
+                            className="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-4 flex flex-col justify-between gap-3"
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <div>
+                                <label className="font-semibold text-xs text-zinc-200 block">
+                                  {item.label}
+                                </label>
+                                <span className="font-mono text-[10px] text-zinc-500">{item.key}</span>
+                              </div>
+
+                              {item.type === 'boolean' && (
+                                <button
+                                  type="button"
+                                  disabled={isOperator}
+                                  onClick={() =>
+                                    handlePropertyChange(
+                                      item.key,
+                                      currentVal === 'true' ? 'false' : 'true'
+                                    )
+                                  }
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer disabled:cursor-not-allowed ${
+                                    currentVal === 'true' ? 'bg-emerald-600' : 'bg-zinc-700'
+                                  }`}
+                                >
+                                  <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                      currentVal === 'true' ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                                  />
+                                </button>
+                              )}
+                            </div>
+
+                            {item.type === 'select' && item.options && (
+                              <select
+                                value={currentVal}
+                                disabled={isOperator}
+                                onChange={(e) => handlePropertyChange(item.key, e.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-amber-500 disabled:opacity-60 cursor-pointer"
+                              >
+                                {item.options.map((opt) => (
+                                  <option key={opt} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {item.type === 'range' && (
+                              <div className="space-y-1.5">
+                                <div className="flex justify-between text-xs text-zinc-400">
+                                  <span>{currentVal || item.min} {item.unit || ''}</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={item.min ?? 1}
+                                  max={item.max ?? 100}
+                                  value={parseInt(currentVal) || item.min || 1}
+                                  disabled={isOperator}
+                                  onChange={(e) => handlePropertyChange(item.key, e.target.value)}
+                                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500 disabled:opacity-50"
+                                />
+                              </div>
+                            )}
+
+                            {item.type === 'number' && (
+                              <input
+                                type="number"
+                                value={currentVal}
+                                disabled={isOperator}
+                                onChange={(e) => handlePropertyChange(item.key, e.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-amber-500 disabled:opacity-60 font-mono"
+                              />
+                            )}
+
+                            {item.type === 'text' && (
+                              <input
+                                type="text"
+                                value={currentVal}
+                                disabled={isOperator}
+                                onChange={(e) => handlePropertyChange(item.key, e.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-amber-500 disabled:opacity-60"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Floating Save Actions Bar */}
+            {isManagerOrOwner && (
+              <div className="sticky bottom-6 z-20 bg-zinc-900/95 border border-zinc-700 rounded-2xl p-4 shadow-2xl backdrop-blur-md flex items-center justify-between gap-4">
+                <div className="text-xs">
+                  {hasModifiedProperties ? (
+                    <span className="text-amber-400 font-semibold flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4" />
+                      Hai modifiche non salvate
+                    </span>
+                  ) : (
+                    <span className="text-zinc-400">Tutte le modifiche sono sincronizzate.</span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setProperties(originalProperties)}
+                    disabled={!hasModifiedProperties || savingProperties}
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-zinc-300 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    Annulla Modifiche
+                  </button>
+                  <button
+                    onClick={handleSaveProperties}
+                    disabled={savingProperties}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-emerald-950/20 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {savingProperties ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Salvataggio...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Salva Proprietà</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: GIOCATORI & WHITELIST */}
+        {activeTab === 'players' && (
+          <div className="space-y-6 animate-in fade-in duration-150">
+            {isOperator && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-5 flex items-start gap-3.5 text-xs text-amber-300">
+                <Lock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-sm text-zinc-100">Gestione Giocatori Bloccata</h4>
+                  <p className="text-zinc-400 leading-relaxed">
+                    Il ruolo Operatore permette di consultare la whitelist esistente in sola lettura. Per aggiungere o rimuovere giocatori è richiesto il ruolo Manager o Proprietario.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+                <div>
+                  <h3 className="font-bold text-base text-white flex items-center gap-2">
+                    <Users className="w-5 h-5 text-purple-400" />
+                    Gestione Whitelist (whitelist.json)
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Controlla chi può entrare nel server Minecraft quando la whitelist è attiva.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 bg-zinc-950 px-3 py-1.5 rounded-xl border border-zinc-800 text-xs">
+                  <span className="text-zinc-400">Stato Whitelist:</span>
+                  <span className={`font-semibold ${properties['white-list'] === 'true' ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                    {properties['white-list'] === 'true' ? 'Attiva (Chiuso)' : 'Disattivata (Aperto a tutti)'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Add player form */}
+              {isManagerOrOwner && (
+                <form onSubmit={handleAddPlayer} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newPlayerName}
+                    onChange={(e) => setNewPlayerName(e.target.value)}
+                    placeholder="Nome utente Minecraft esatto (es. Notch, Alex)..."
+                    disabled={isWhitelistLoading}
+                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 outline-none focus:border-purple-500 transition-colors"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isWhitelistLoading || !newPlayerName.trim()}
+                    className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    {isWhitelistLoading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                    <span>Aggiungi Giocatore</span>
+                  </button>
+                </form>
+              )}
+
+              {/* Whitelist list */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 {whitelist.length === 0 ? (
-                  <div className="col-span-full py-8 text-center text-zinc-500 italic bg-zinc-800/30 rounded-lg border border-dashed border-zinc-700">
-                    Nessun utente in whitelist. Il server è aperto a tutti se la whitelist è OFF.
+                  <div className="col-span-full py-12 text-center text-xs text-zinc-500 border border-dashed border-zinc-800 rounded-xl bg-zinc-950/40">
+                    Nessun giocatore registrato nella whitelist.
                   </div>
                 ) : (
-                  whitelist.map(player => (
-                    <div key={player.uuid} className="bg-zinc-800 border border-zinc-700 p-3 rounded-lg flex items-center justify-between hover:border-zinc-500 transition-colors group">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-zinc-700 rounded-md flex items-center justify-center text-lg shadow-inner">
-                          👤
+                  whitelist.map((player) => (
+                    <div
+                      key={player.uuid || player.name}
+                      className="bg-zinc-950 border border-zinc-800 rounded-xl p-3 flex items-center justify-between gap-3 group hover:border-zinc-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 font-bold text-xs uppercase shrink-0">
+                          {player.name.charAt(0)}
                         </div>
-                        <div>
-                          <div className="font-bold text-sm text-white">{player.name}</div>
-                          <div className="text-[10px] text-zinc-500 font-mono truncate w-24">{player.uuid}</div>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-xs text-zinc-200 truncate">{player.name}</div>
+                          <div className="font-mono text-[10px] text-zinc-500 truncate w-28">{player.uuid}</div>
                         </div>
                       </div>
-                      <button 
-                        onClick={() => handleRemovePlayer(player.name)}
-                        className="text-zinc-500 hover:text-red-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Rimuovi"
-                      >
-                        🗑️
-                      </button>
+
+                      {isManagerOrOwner && (
+                        <button
+                          onClick={() => handleRemovePlayer(player.name)}
+                          className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-80 group-hover:opacity-100"
+                          title="Rimuovi dalla whitelist"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   ))
                 )}
@@ -866,202 +1360,273 @@ function ServerManagementInner() {
           </div>
         )}
 
-        {/* World Management */}
-        {!isLoading && serverId && (
-          <div className="mb-8 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl">
-            <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
-              <div>
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  🌍 Gestione Mondo
-                </h3>
-                <p className="text-zinc-400 text-sm">Scarica un backup completo del mondo attuale</p>
+        {/* TAB 5: MOD & FILE */}
+        {activeTab === 'files' && (
+          <div className="space-y-6 animate-in fade-in duration-150">
+            {isOperator && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-5 flex items-start gap-3.5 text-xs text-amber-300">
+                <Lock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-sm text-zinc-100">Upload e Modifiche File Bloccate</h4>
+                  <p className="text-zinc-400 leading-relaxed">
+                    Il caricamento di file e modpack è riservato ai ruoli Manager e Proprietario per garantire l'integrità del server.
+                  </p>
+                </div>
               </div>
-              <button 
-                onClick={handleExportWorld}
-                className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-              >
-                📥 Scarica Mondo (.zip)
-              </button>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* Mod & Modpack Management */}
-        {!isLoading && serverId && mcType && ['FORGE', 'NEOFORGE', 'FABRIC', 'QUILT', 'MAGMA', 'MOHIST'].includes(mcType) && (
-          <div className="mb-8 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl">
-            <div className="p-6 border-b border-zinc-800 bg-zinc-900/50 flex justify-between items-center">
-              <div>
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                  📦 Gestione Mod & Modpack
-                </h3>
-                <p className="text-zinc-400 text-sm">Carica file .jar (singole mod) o .zip (interi modpack)</p>
+            {/* Backups & Downloads */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                <div>
+                  <h3 className="font-bold text-sm text-white">Esportazione & Backup Istantanei</h3>
+                  <p className="text-xs text-zinc-400">Scarica archivi .zip completi del mondo o della cartella mod.</p>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={handleDownloadMods}
-                  className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold rounded-lg border border-zinc-700 transition-colors flex items-center gap-1"
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={handleExportWorld}
+                  className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-2 cursor-pointer"
                 >
-                  📥 Scarica /mods
+                  <Download className="w-4 h-4 text-emerald-400" />
+                  <span>Scarica Mondo (.zip)</span>
                 </button>
-                <span className="px-3 py-1 bg-zinc-800 text-zinc-300 text-xs font-mono rounded-full border border-zinc-700">
-                  /mods
-                </span>
+
+                <button
+                  onClick={handleExportMods}
+                  className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-2 cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-blue-400" />
+                  <span>Scarica Cartella /mods (.zip)</span>
+                </button>
               </div>
             </div>
-            
-            <div className="p-6 space-y-6">
-              {/* Form Upload Bulk */}
-              <form onSubmit={handleUploadMods} className="space-y-4">
-                <div className="flex flex-col gap-4 p-6 bg-zinc-800/50 border-2 border-dashed border-zinc-700 rounded-xl hover:border-blue-500/50 transition-colors">
-                  <div className="flex flex-col items-center justify-center text-center">
-                    <div className="text-4xl mb-2">📁</div>
-                    <p className="text-zinc-300 font-medium">Seleziona uno o più file</p>
-                    <p className="text-zinc-500 text-xs">Supportati: .jar, .zip (auto-extract)</p>
-                  </div>
-                  <input 
-                    id="mod-upload-input"
-                    type="file" 
-                    multiple
-                    accept=".jar,.zip"
-                    onChange={(e) => setModFiles(Array.from(e.target.files || []))}
-                    className="block w-full text-sm text-zinc-400
-                      file:mr-4 file:py-2 file:px-4
-                      file:rounded-full file:border-0
-                      file:text-sm file:font-semibold
-                      file:bg-zinc-700 file:text-zinc-200
-                      hover:file:bg-zinc-600 cursor-pointer"
-                  />
+
+            {/* Upload Section (Manager & Owner) */}
+            {isManagerOrOwner && (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-5">
+                <div>
+                  <h3 className="font-bold text-sm text-white">Caricamento Mod & Modpack</h3>
+                  <p className="text-xs text-zinc-400">
+                    Carica file singoli <code className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">.jar</code> o interi archivi <code className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">.zip</code> che verranno estratti automaticamente.
+                  </p>
                 </div>
 
-                {modFiles.length > 0 && (
-                  <div className="flex items-center justify-between bg-zinc-800 p-3 rounded-lg border border-zinc-700">
-                    <span className="text-sm text-zinc-300">{modFiles.length} file selezionati</span>
-                    <button 
-                      type="submit"
-                      disabled={isModUploading}
-                      className="bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 px-6 py-2 rounded-lg font-bold transition-all flex items-center gap-2"
-                    >
-                      {isModUploading ? (
-                        <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      ) : '🚀 Inizia Caricamento'}
-                    </button>
+                <form onSubmit={handleUploadMods} className="space-y-4">
+                  <div className="p-8 bg-zinc-950/60 border-2 border-dashed border-zinc-800 hover:border-emerald-500/40 rounded-2xl text-center space-y-3 transition-colors">
+                    <Upload className="w-8 h-8 text-zinc-500 mx-auto" />
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-200">Seleziona o trascina file .jar o .zip</p>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">Compatibile con Fabric, Forge, NeoForge, Spigot</p>
+                    </div>
+
+                    <input
+                      type="file"
+                      multiple
+                      accept=".jar,.zip"
+                      onChange={(e) => setModFiles(Array.from(e.target.files || []))}
+                      className="block w-full text-xs text-zinc-400
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-xl file:border-0
+                        file:text-xs file:font-semibold
+                        file:bg-zinc-800 file:text-zinc-200
+                        hover:file:bg-zinc-700 cursor-pointer max-w-sm mx-auto"
+                    />
+                  </div>
+
+                  {modFiles.length > 0 && (
+                    <div className="flex items-center justify-between bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+                      <span className="text-xs text-zinc-300 font-medium">{modFiles.length} file pronti per il caricamento</span>
+                      <button
+                        type="submit"
+                        disabled={isModUploading}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {isModUploading ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Caricamento in corso...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>Avvia Caricamento</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </form>
+
+                {/* Upload Results */}
+                {uploadResults.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <h5 className="text-xs font-semibold text-zinc-400">Esito del caricamento:</h5>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {uploadResults.map((r, i) => (
+                        <div
+                          key={i}
+                          className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 flex items-center justify-between text-xs"
+                        >
+                          <span className="font-mono text-zinc-300 truncate max-w-md">{r.file}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            r.status === 'extracted' || r.status === 'uploaded'
+                              ? 'bg-emerald-500/10 text-emerald-400'
+                              : 'bg-red-500/10 text-red-400'
+                          }`}>
+                            {r.status.toUpperCase()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
-              </form>
+              </div>
+            )}
+          </div>
+        )}
 
-              {/* Risultati Upload */}
-              {uploadResults.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-zinc-400 px-1">Risultati ultimo caricamento:</h4>
-                  <div className="max-h-40 overflow-y-auto space-y-1 pr-2 custom-scrollbar">
-                    {uploadResults.map((res, idx) => (
-                      <div key={idx} className={`text-xs p-2 rounded flex justify-between items-center ${
-                        res.status === 'error' || res.status === 'rejected' ? 'bg-red-900/20 text-red-400' : 'bg-green-900/20 text-green-400'
-                      }`}>
-                        <span className="truncate flex-1 font-mono">{res.file}</span>
-                        <span className="font-bold uppercase text-[10px] px-2 py-0.5 rounded-full bg-black/30">
-                          {res.status === 'extracted' ? '📦 ESTRATTO' : 
-                           res.status === 'uploaded' ? '✅ CARICATO' : 
-                           res.status === 'rejected' ? '❌ RIFIUTATO' : '⚠️ ERRORE'}
-                        </span>
-                      </div>
-                    ))}
+        {/* TAB 6: CONDIVISIONE & TEAM */}
+        {activeTab === 'share' && server && (
+          <div className="space-y-6 animate-in fade-in duration-150">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                    <Share2 className="w-5 h-5" />
                   </div>
-                  <button 
-                    onClick={() => setUploadResults([])}
-                    className="text-[10px] text-zinc-500 hover:text-zinc-300 underline"
-                  >
-                    Pulisci cronologia
-                  </button>
+                  <div>
+                    <h3 className="font-bold text-base text-white">Condivisione Server & Gestione Ruoli</h3>
+                    <p className="text-xs text-zinc-400">Invita amici e staff a collaborare sul server con autorizzazioni sicure.</p>
+                  </div>
                 </div>
-              )}
+
+                <button
+                  onClick={() => setIsShareModalOpen(true)}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-purple-950/20 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Invita Collaboratore</span>
+                </button>
+              </div>
+
+              {/* Informative tier card */}
+              <div className="bg-zinc-950/70 border border-zinc-800 rounded-xl p-5 space-y-3">
+                <h4 className="text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  Gerarchia dei Permessi
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="p-3.5 rounded-lg bg-zinc-900 border border-zinc-800 space-y-1.5">
+                    <div className="flex items-center gap-1.5 font-bold text-purple-300">
+                      <Shield className="w-4 h-4 text-purple-400" />
+                      Ruolo: Manager
+                    </div>
+                    <p className="text-zinc-400 leading-relaxed">
+                      Assegnato automaticamente agli utenti con piano <strong className="text-zinc-200">Contributor, Premium o Ultra</strong>. Permette modifica completa di server.properties, whitelist, caricamento file e comandi RCON.
+                    </p>
+                  </div>
+                  <div className="p-3.5 rounded-lg bg-zinc-900 border border-zinc-800 space-y-1.5">
+                    <div className="flex items-center gap-1.5 font-bold text-blue-300">
+                      <UserIcon className="w-4 h-4 text-blue-400" />
+                      Ruolo: Operatore
+                    </div>
+                    <p className="text-zinc-400 leading-relaxed">
+                      Assegnato agli utenti con piano <strong className="text-zinc-200">Free</strong>. Consente di visualizzare lo stato in tempo reale, leggere i log della console e avviare o riavviare il server.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Collaborators Quick Access */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                  Membri del Server
+                </h4>
+
+                <div className="space-y-2">
+                  {/* Owner row */}
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center font-bold text-emerald-400 uppercase text-xs">
+                        {server.owner?.username?.charAt(0) || 'P'}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-xs text-white flex items-center gap-2">
+                          <span>{server.owner?.username || 'Proprietario'}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
+                            Proprietario
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-zinc-500">{server.owner?.email || 'Account primario'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Collaborators row preview */}
+                  {server.collaborators && server.collaborators.length > 0 ? (
+                    server.collaborators.map((c) => (
+                      <div key={c.id} className="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-zinc-300 uppercase text-xs">
+                            {c.user?.username?.charAt(0) || 'U'}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-xs text-white flex items-center gap-2">
+                              <span>{c.user?.username || 'Collaboratore'}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                c.role === 'MANAGER'
+                                  ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                                  : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                              }`}>
+                                {c.role || 'OPERATOR'}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-zinc-500">{c.user?.email}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-6 text-xs text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+                      Nessun collaboratore attivo. Clicca "Invita Collaboratore" per generare un link.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
+      </main>
 
-        {isLoading && (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4 text-zinc-400">Caricamento proprietà...</p>
-          </div>
-        )}
-
-        {!isLoading && Object.keys(properties).length > 0 && (
-          <div className="space-y-6">
-            {/* Nuovo rendering completo con tutte le proprietà */}
-            {Object.entries(groupedProperties).map(([category, props]) => (
-              <div key={category} className="mb-6">
-                <h3 className="text-lg font-semibold mb-3 text-gray-200 border-b border-gray-700 pb-1">{category}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {props.map(prop => (
-                    <div key={prop.key} className="flex justify-between items-center p-2 bg-zinc-800 rounded-md">
-                      <label className="text-sm text-gray-300">{prop.label}</label>
-                      {prop.type === 'boolean' ? (
-                        <button
-                          onClick={() => handleChange(prop.key, properties[prop.key] === 'true' ? 'false' : 'true')}
-                          disabled={isRunning}
-                          className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${properties[prop.key] === 'true' ? 'bg-green-700 hover:bg-green-600' : 'bg-red-700 hover:bg-red-600'} disabled:opacity-50 disabled:cursor-not-allowed`}
-                        >
-                          {properties[prop.key] === 'true' ? '✓ Attivo' : '✗ Disattivo'}
-                        </button>
-                      ) : prop.type === 'select' ? (
-                        <select
-                          value={properties[prop.key] || (prop.options ? prop.options[0] : '')}
-                          onChange={(e) => handleChange(prop.key, e.target.value)}
-                          disabled={isRunning}
-                          className="bg-zinc-700 px-2 py-1 rounded text-sm disabled:opacity-50"
-                        >
-                          {prop.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                        </select>
-                      ) : (
-                        <input
-                          type={prop.type}
-                          value={properties[prop.key] ?? ''}
-                          onChange={(e) => handleChange(prop.key, e.target.value)}
-                          disabled={isRunning}
-                          className="bg-zinc-700 px-2 py-1 rounded w-40 text-right text-sm disabled:opacity-50"
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-8 flex justify-end gap-4">
-          <button
-            onClick={() => setProperties(defaultServerProperties)}
-            className="px-6 py-3 bg-zinc-700 hover:bg-zinc-600 rounded-lg transition-colors"
-          >
-            Ripristina Default
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isLoading || !serverId}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
-          >
-            {isLoading ? 'Salvataggio...' : 'Salva Proprietà'}
-          </button>
-        </div>
-      </div>
+      {/* Share Modal Dialog */}
+      {isShareModalOpen && server && (
+        <ShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => {
+            setIsShareModalOpen(false);
+            loadServerData(); // reload on close to reflect any collaborator additions or removals
+          }}
+          serverId={server.id}
+          serverName={server.name}
+          isOwner={userRole === 'OWNER'}
+        />
+      )}
     </div>
   );
 }
 
-// Main page component with Suspense wrapper
 export default function ServerManagementPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-zinc-950 text-white p-8 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-zinc-400">Caricamento...</p>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
+          <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
         </div>
-      </div>
-    }>
-      <ServerManagementInner />
+      }
+    >
+      <ServerManagementContent />
     </Suspense>
   );
 }

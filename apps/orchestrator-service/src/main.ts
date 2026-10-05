@@ -56,13 +56,42 @@ async function bootstrap() {
   
   // Register global interceptor for BigInt conversion
   app.useGlobalInterceptors(new BigIntInterceptor());
+
+  // Security Headers Middleware
+  app.use((req: any, res: any, next: () => void) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.removeHeader('X-Powered-By');
+    next();
+  });
   
-  // Enable CORS for all origins (frontend on different port)
+  // Secure CORS configuration
+  const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS 
+    ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://localhost:3002'];
+
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+      if (!origin) return callback(null, true);
+      if (
+        allowedOrigins.includes(origin) ||
+        /^http:\/\/localhost:[0-9]+$/.test(origin) ||
+        /^http:\/\/127\.0\.0\.1:[0-9]+$/.test(origin) ||
+        /^http:\/\/192\.168\.[0-9]+\.[0-9]+(:[0-9]+)?$/.test(origin)
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error('CORS blocked: Origin not allowed'), false);
+    },
     credentials: true,
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    allowedHeaders: 'Content-Type, Accept',
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With'],
+    maxAge: 86400,
   });
   
   // Add global prefix for all routes

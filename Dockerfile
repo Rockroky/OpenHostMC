@@ -5,6 +5,9 @@ RUN apk add --no-cache openssl ca-certificates curl python3 make g++
 
 WORKDIR /app
 
+# Set production environment
+ENV NODE_ENV=production
+
 # Copia i file di configurazione
 COPY package*.json ./
 COPY turbo.json ./

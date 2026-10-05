@@ -69,23 +69,41 @@ async function bootstrap() {
     next();
   });
   
-  // Secure CORS configuration
-  const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS 
+  // CORS configuration — permissive in dev/staging, strict in production
+  const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
     ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
-    : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://localhost:3002'];
+    : [];
+
+  const isProduction = process.env.NODE_ENV === 'production';
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+      // Allow requests with no origin (server-to-server, mobile apps, curl)
       if (!origin) return callback(null, true);
+
+      // In dev/staging allow all origins
+      if (!isProduction) return callback(null, true);
+
+      // Check explicit allowlist from env var
+      if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow localhost and 127.0.0.1 on any port (http + https)
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow private network subnets (192.168.x.x, 172.16-31.x.x, 10.x.x.x)
       if (
-        allowedOrigins.includes(origin) ||
-        /^http:\/\/localhost:[0-9]+$/.test(origin) ||
-        /^http:\/\/127\.0\.0\.1:[0-9]+$/.test(origin) ||
-        /^http:\/\/192\.168\.[0-9]+\.[0-9]+(:[0-9]+)?$/.test(origin)
+        /^https?:\/\/192\.168\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?$/.test(origin) ||
+        /^https?:\/\/10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?$/.test(origin) ||
+        /^https?:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?$/.test(origin)
       ) {
         return callback(null, true);
       }
+
+      // Block everything else in production
       return callback(new Error('CORS blocked: Origin not allowed'), false);
     },
     credentials: true,

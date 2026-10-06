@@ -641,11 +641,11 @@ export default function DashboardPage() {
         )}
 
         {/* Controls & Filter Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pb-2">
-          <div className="flex items-center gap-2 bg-zinc-900 p-1 rounded-xl border border-zinc-800 self-start">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 pb-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-zinc-900 p-1 rounded-xl border border-zinc-800 max-w-full overflow-x-auto no-scrollbar shrink-0">
             <button
               onClick={() => setFilter('ALL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
                 filter === 'ALL'
                   ? 'bg-zinc-800 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
@@ -655,7 +655,7 @@ export default function DashboardPage() {
             </button>
             <button
               onClick={() => setFilter('OWNED')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
                 filter === 'OWNED'
                   ? 'bg-zinc-800 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
@@ -665,7 +665,7 @@ export default function DashboardPage() {
             </button>
             <button
               onClick={() => setFilter('SHARED')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
                 filter === 'SHARED'
                   ? 'bg-zinc-800 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200'
@@ -675,7 +675,7 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          <div className="relative max-w-xs w-full">
+          <div className="relative w-full sm:max-w-xs">
             <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -775,32 +775,32 @@ export default function DashboardPage() {
               const cpuCores = server.allocated_cpu_cores || server.plan?.cpu_cores || 1.0;
 
               return (
-                <StaggerItem key={server.id}>
+                <StaggerItem key={server.id} className="h-full">
                 <motion.div
                   whileHover={{ y: -2, boxShadow: '0 12px 40px rgba(0,0,0,0.35)' }}
                   transition={{ duration: 0.2 }}
-                  className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 rounded-2xl transition-colors flex flex-col justify-between overflow-hidden shadow-lg shadow-black/20"
+                  className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 rounded-2xl transition-colors flex flex-col justify-between overflow-hidden shadow-lg shadow-black/20 h-full"
                 >
-                  <div className="p-5 sm:p-6 space-y-5">
+                  <div className="p-4 sm:p-5 space-y-4 flex-1">
                     {/* Server Header */}
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
                         {isOwner && (
                           <input
                             type="checkbox"
                             checked={selectedServers.includes(server.id)}
                             onChange={() => toggleServerSelection(server.id)}
-                            className="mt-1 w-4 h-4 rounded border-zinc-700 bg-zinc-800 text-emerald-600 focus:ring-emerald-500 shrink-0"
+                            className="mt-1 w-4 h-4 rounded border-zinc-700 bg-zinc-800 text-emerald-600 focus:ring-emerald-500 shrink-0 cursor-pointer"
                           />
                         )}
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h2 className="text-lg font-bold text-white tracking-tight truncate">
+                            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight truncate max-w-full">
                               {server.name}
                             </h2>
                             {getRoleBadge(role)}
                           </div>
-                          <p className="text-xs text-zinc-400 font-mono truncate mt-0.5">
+                          <p className="text-xs text-zinc-400 font-mono truncate mt-0.5" title={`${server.subdomain || server.name}.openhostmc.net${server.port ? `:${server.port}` : ''}`}>
                             {server.subdomain || server.name}.openhostmc.net
                             {server.port ? `:${server.port}` : ''}
                           </p>
@@ -811,43 +811,43 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Resources & Specs */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-                      <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-800/80">
-                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold flex items-center gap-1">
-                          <Layers className="w-3 h-3" />
-                          Versione
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="bg-zinc-950/60 p-2 sm:p-2.5 rounded-xl border border-zinc-800/80 min-w-0 overflow-hidden">
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold flex items-center gap-1 truncate">
+                          <Layers className="w-3 h-3 shrink-0" />
+                          <span className="truncate">Versione</span>
                         </div>
-                        <div className="font-mono text-zinc-200 mt-0.5 truncate">
+                        <div className="font-mono text-zinc-200 mt-0.5 truncate text-xs font-medium" title={server.mc_version}>
                           {server.mc_version}
                         </div>
                       </div>
 
-                      <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-800/80">
-                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold flex items-center gap-1">
-                          <Server className="w-3 h-3" />
-                          Tipo
+                      <div className="bg-zinc-950/60 p-2 sm:p-2.5 rounded-xl border border-zinc-800/80 min-w-0 overflow-hidden">
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold flex items-center gap-1 truncate">
+                          <Server className="w-3 h-3 shrink-0" />
+                          <span className="truncate">Tipo</span>
                         </div>
-                        <div className="font-semibold text-zinc-200 mt-0.5 truncate">
+                        <div className="font-semibold text-zinc-200 mt-0.5 truncate text-xs" title={server.mc_type}>
                           {server.mc_type}
                         </div>
                       </div>
 
-                      <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-800/80">
-                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold flex items-center gap-1">
-                          <HardDrive className="w-3 h-3" />
-                          RAM
+                      <div className="bg-zinc-950/60 p-2 sm:p-2.5 rounded-xl border border-zinc-800/80 min-w-0 overflow-hidden">
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold flex items-center gap-1 truncate">
+                          <HardDrive className="w-3 h-3 shrink-0" />
+                          <span className="truncate">RAM</span>
                         </div>
-                        <div className="font-semibold text-emerald-400 mt-0.5">
+                        <div className="font-semibold text-emerald-400 mt-0.5 truncate text-xs">
                           {ramGb} GB
                         </div>
                       </div>
 
-                      <div className="bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-800/80">
-                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold flex items-center gap-1">
-                          <Cpu className="w-3 h-3" />
-                          CPU
+                      <div className="bg-zinc-950/60 p-2 sm:p-2.5 rounded-xl border border-zinc-800/80 min-w-0 overflow-hidden">
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold flex items-center gap-1 truncate">
+                          <Cpu className="w-3 h-3 shrink-0" />
+                          <span className="truncate">CPU</span>
                         </div>
-                        <div className="font-semibold text-blue-400 mt-0.5">
+                        <div className="font-semibold text-blue-400 mt-0.5 truncate text-xs">
                           {cpuCores} Cores
                         </div>
                       </div>
@@ -855,101 +855,115 @@ export default function DashboardPage() {
 
                     {/* If collaborator, show owner info */}
                     {!isOwner && server.owner && (
-                      <div className="text-[11px] text-zinc-400 flex items-center gap-1.5 bg-zinc-950/40 px-3 py-1.5 rounded-lg border border-zinc-800/50">
+                      <div className="text-[11px] text-zinc-400 flex items-center gap-1.5 bg-zinc-950/40 px-3 py-1.5 rounded-lg border border-zinc-800/50 min-w-0">
                         <Crown className="w-3 h-3 text-emerald-400 shrink-0" />
-                        <span>Proprietario del server: <strong className="text-zinc-200">{server.owner.username}</strong></span>
+                        <span className="truncate">Proprietario del server: <strong className="text-zinc-200">{server.owner.username}</strong></span>
                       </div>
                     )}
                   </div>
 
                   {/* Actions Footer */}
-                  <div className="bg-zinc-950/70 border-t border-zinc-800/80 p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <div className="bg-zinc-950/70 border-t border-zinc-800/80 p-3 sm:p-3.5 space-y-2">
+                    {/* Power Controls Row */}
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                       {/* Avvia Button */}
                       <button
                         onClick={() => handleStartServer(server.id)}
                         disabled={isBusy || isRunning || isStarting}
-                        className="flex-1 py-2 px-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+                        className={`py-2 px-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm min-w-0 ${
+                          isRunning
+                            ? 'bg-zinc-800/40 text-zinc-600 border border-zinc-800/40 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/30'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
                         title="Avvia il server"
                       >
                         {isBusy && actionType === 'start' ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
                         ) : (
-                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <Play className="w-3.5 h-3.5 fill-current shrink-0" />
                         )}
-                        <span>Avvia</span>
+                        <span className="truncate">Avvia</span>
                       </button>
 
                       {/* Riavvia Button */}
                       <button
                         onClick={() => handleRestartServer(server.id)}
                         disabled={isBusy || isStopped}
-                        className="flex-1 py-2 px-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800/50 disabled:text-zinc-600 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center justify-center gap-1.5"
+                        className={`py-2 px-2 rounded-xl text-xs font-semibold transition-all border flex items-center justify-center gap-1.5 min-w-0 ${
+                          isRunning
+                            ? 'bg-zinc-800 hover:bg-zinc-700 text-blue-400 border-blue-500/30 hover:border-blue-500/50'
+                            : 'bg-zinc-900/60 text-zinc-600 border-zinc-800/60 cursor-not-allowed'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
                         title="Riavvia il server"
                       >
                         {isBusy && actionType === 'restart' ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400 shrink-0" />
                         ) : (
-                          <RotateCw className="w-3.5 h-3.5 text-blue-400" />
+                          <RotateCw className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                         )}
-                        <span>Riavvia</span>
+                        <span className="truncate">Riavvia</span>
                       </button>
 
                       {/* Arresta Button */}
                       <button
                         onClick={() => handleStopServer(server.id)}
                         disabled={isBusy || isStopped || isStopping}
-                        className="py-2 px-2.5 bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 disabled:bg-zinc-800/50 disabled:text-zinc-600 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center justify-center gap-1.5"
+                        className={`py-2 px-2 rounded-xl text-xs font-semibold transition-all border flex items-center justify-center gap-1.5 min-w-0 ${
+                          isRunning
+                            ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30 hover:border-red-500/50'
+                            : 'bg-zinc-900/60 text-zinc-600 border-zinc-800/60 cursor-not-allowed'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
                         title="Arresta il server"
                       >
                         {isBusy && actionType === 'stop' ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-red-400" />
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-red-400 shrink-0" />
                         ) : (
-                          <Square className="w-3.5 h-3.5 fill-current text-red-400" />
+                          <Square className="w-3.5 h-3.5 fill-current text-red-400 shrink-0" />
                         )}
-                        <span>Arresta</span>
+                        <span className="truncate">Arresta</span>
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-end gap-1.5 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-800/60">
-                      {/* Share Button (opens modal) */}
-                      <button
-                        onClick={() => setShareServer(server)}
-                        className="p-2 bg-zinc-800 hover:bg-purple-500/20 hover:text-purple-300 rounded-lg text-zinc-300 text-xs font-medium transition-colors border border-zinc-700"
-                        title="Condividi server"
+                    {/* Secondary Tools & Links Row */}
+                    <div className="flex items-center gap-1.5 sm:gap-2 pt-1.5 border-t border-zinc-800/60">
+                      {/* Manage Link */}
+                      <Link
+                        href={`/server-management?serverId=${server.id}`}
+                        className="flex-1 py-1.5 sm:py-2 px-2.5 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 rounded-xl text-xs font-semibold transition-colors border border-emerald-500/30 flex items-center justify-center gap-1.5 min-w-0"
+                        title="Gestione avanzata e configurazione"
                       >
-                        <Share2 className="w-3.5 h-3.5" />
-                      </button>
+                        <Sliders className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">Gestisci</span>
+                      </Link>
 
                       {/* Console Link */}
                       <Link
                         href={`/console?serverId=${server.id}`}
-                        className="px-2.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-medium transition-colors border border-zinc-700 flex items-center gap-1"
+                        className="flex-1 py-1.5 sm:py-2 px-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-medium transition-colors border border-zinc-700/60 flex items-center justify-center gap-1.5 min-w-0"
                         title="Apri Console RCON"
                       >
-                        <Terminal className="w-3.5 h-3.5 text-zinc-400" />
-                        <span className="hidden xl:inline">Console</span>
+                        <Terminal className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                        <span className="truncate">Console</span>
                       </Link>
 
-                      {/* Manage Server Link */}
-                      <Link
-                        href={`/server-management?serverId=${server.id}`}
-                        className="px-3 py-2 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 rounded-lg text-xs font-semibold transition-colors border border-emerald-500/30 flex items-center gap-1.5"
-                        title="Gestione avanzata e configurazione"
+                      {/* Share Button (opens modal) */}
+                      <button
+                        onClick={() => setShareServer(server)}
+                        className="p-1.5 sm:p-2 bg-zinc-800 hover:bg-purple-500/20 hover:text-purple-300 rounded-xl text-zinc-300 text-xs font-medium transition-colors border border-zinc-700/60 flex items-center justify-center shrink-0"
+                        title="Condividi server"
                       >
-                        <Sliders className="w-3.5 h-3.5" />
-                        <span>Gestisci</span>
-                      </Link>
+                        <Share2 className="w-3.5 h-3.5 shrink-0" />
+                      </button>
 
                       {/* Delete button (Owner only) */}
                       {isOwner && (
                         <button
                           onClick={() => handleDeleteServer(server.id)}
                           disabled={isBusy}
-                          className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          className="p-1.5 sm:p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors border border-transparent hover:border-red-500/20 flex items-center justify-center shrink-0 disabled:opacity-40"
                           title="Elimina server"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5 shrink-0" />
                         </button>
                       )}
                     </div>

@@ -10,7 +10,7 @@ import { Suspense } from 'react';
 
 function ConsoleInner() {
   const searchParams = useSearchParams();
-  const serverId = searchParams?.get('serverId');
+  const serverId = searchParams?.get('serverId') || searchParams?.get('id') || '';
   const terminalRef = useRef<HTMLDivElement>(null);
   const term = useRef<any>(null);
   const fitAddon = useRef<any>(null);
@@ -33,22 +33,29 @@ function ConsoleInner() {
       import('@xterm/xterm'),
       import('@xterm/addon-fit')
     ]).then(([{ Terminal }, { FitAddon }]) => {
-      if (isDisposed) return;
+      if (isDisposed || !terminalRef.current) return;
 
-      term.current = new Terminal({
+      terminalRef.current.innerHTML = '';
+
+      const terminal = new Terminal({
         theme: { background: '#18181b', foreground: '#e4e4e7' },
         fontFamily: 'monospace',
         fontSize: 14,
         convertEol: true,
       });
+      term.current = terminal;
       
-      fitAddon.current = new FitAddon();
-      term.current.loadAddon(fitAddon.current);
-      term.current.open(terminalRef.current!);
-      fitAddon.current.fit();
+      const fit = new FitAddon();
+      fitAddon.current = fit;
+      terminal.loadAddon(fit);
+      terminal.open(terminalRef.current);
+      try {
+        fit.fit();
+      } catch {}
 
       const host = window.location.hostname;
-      socket.current = io(`ws://${host}:3005/console`, {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      socket.current = io(`${protocol}//${host}:3005/console`, {
         transports: ['websocket'],
       });
 

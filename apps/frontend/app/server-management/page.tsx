@@ -171,7 +171,18 @@ function ServerManagementContent() {
   const serverId = searchParams?.get('serverId') || searchParams?.get('id') || '';
   const router = useRouter();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
+  const tabParam = (searchParams?.get('tab') as ActiveTab) || 'overview';
+  const validTabs: ActiveTab[] = ['overview', 'console', 'config', 'players', 'files', 'share'];
+  const [activeTab, setActiveTab] = useState<ActiveTab>(
+    validTabs.includes(tabParam) ? tabParam : 'overview'
+  );
+
+  useEffect(() => {
+    const t = searchParams?.get('tab') as ActiveTab;
+    if (t && validTabs.includes(t)) {
+      setActiveTab(t);
+    }
+  }, [searchParams]);
   const [server, setServer] = useState<ServerDetails | null>(null);
   const [properties, setProperties] = useState<ServerProperties>({});
   const [originalProperties, setOriginalProperties] = useState<ServerProperties>({});
@@ -299,11 +310,12 @@ function ServerManagementContent() {
   // Determine user role
   const getUserRole = (): 'OWNER' | 'MANAGER' | 'OPERATOR' => {
     if (!currentUser || !server) return 'OPERATOR';
-    if (server.owner_id === currentUser.id || currentUser.role === 'SUPERADMIN') {
+    const currentUserId = currentUser.id || currentUser.sub;
+    if (server.owner_id === currentUserId || currentUser.role === 'SUPERADMIN') {
       return 'OWNER';
     }
     const collab = server.collaborators?.find(
-      (c) => c.user_id === currentUser.id || c.user?.id === currentUser.id
+      (c) => c.user_id === currentUserId || c.user?.id === currentUserId
     );
     if (collab) {
       if (collab.role === 'MANAGER' || collab.user?.plan?.can_edit_shared_servers) {
@@ -320,7 +332,7 @@ function ServerManagementContent() {
 
   // Live Console setup when activeTab === 'console'
   useEffect(() => {
-    if (activeTab !== 'console' || !serverId) {
+    if (activeTab !== 'console' || !serverId || loading) {
       if (consoleSocket.current) {
         consoleSocket.current.disconnect();
         consoleSocket.current = null;
@@ -329,83 +341,98 @@ function ServerManagementContent() {
         term.current.dispose();
         term.current = null;
       }
+      setIsConsoleConnected(false);
       return;
     }
 
     let isDisposed = false;
 
-    Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]).then(
-      ([{ Terminal }, { FitAddon }]) => {
-        if (isDisposed || !terminalRef.current) return;
+    // Piccolo timeout per assicurarsi che il container DOM sia montato e visibile
+    const initTimer = setTimeout(() => {
+      Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]).then(
+        ([{ Terminal }, { FitAddon }]) => {
+          if (isDisposed || !terminalRef.current) return;
 
-        term.current = new Terminal({
-          theme: {
-            background: '#09090b',
-            foreground: '#e4e4e7',
-            cursor: '#10b981',
-            selectionBackground: '#10b98133',
-          },
-          fontFamily: 'monospace',
-          fontSize: 13,
-          convertEol: true,
-          cursorBlink: true,
-        });
+          // Pulisce il nodo DOM per evitare duplicazioni del terminale xterm
+          terminalRef.current.innerHTML = '';
 
-        fitAddon.current = new FitAddon();
-        term.current.loadAddon(fitAddon.current);
-        term.current.open(terminalRef.current);
-        fitAddon.current.fit();
+          const terminal = new Terminal({
+            theme: {
+              background: '#09090b',
+              foreground: '#e4e4e7',
+              cursor: '#10b981',
+              selectionBackground: '#10b98133',
+            },
+            fontFamily: 'monospace',
+            fontSize: 13,
+            convertEol: true,
+            cursorBlink: true,
+          });
+          term.current = terminal;
 
-        const host = window.location.hostname;
-        const socket = io(`ws://${host}:3005/console`, {
-          transports: ['websocket'],
-        });
-        consoleSocket.current = socket;
+          const fit = new FitAddon();
+          fitAddon.current = fit;
+          terminal.loadAddon(fit);
+          terminal.open(terminalRef.current);
 
-        const token = localStorage.getItem('token');
-
-        socket.on('connect', () => {
-          setIsConsoleConnected(true);
-          term.current?.writeln('\x1b[32m[OpenHostMC] Connesso al WebSocket del server.\x1b[0m');
-          socket.emit('join-console', { serverId, token });
-        });
-
-        socket.on('console-log', (data: string) => {
-          term.current?.write(data);
-        });
-
-        socket.on('console-error', (err: string) => {
-          term.current?.writeln(`\x1b[31m[Errore Console] ${err}\x1b[0m`);
-        });
-
-        socket.on('stats', (data: { cpu: number; ram: number }) => {
-          setStats(data);
-        });
-
-        socket.on('disconnect', () => {
-          setIsConsoleConnected(false);
-          term.current?.writeln('\x1b[31m[OpenHostMC] Disconnesso dal WebSocket.\x1b[0m');
-        });
-
-        const handleResize = () => {
           try {
-            fitAddon.current?.fit();
+            fit.fit();
           } catch {}
-        };
-        window.addEventListener('resize', handleResize);
 
-        let resizeObserver: ResizeObserver | null = null;
-        if (terminalRef.current && typeof ResizeObserver !== 'undefined') {
-          resizeObserver = new ResizeObserver(() => handleResize());
-          resizeObserver.observe(terminalRef.current);
+          const host = window.location.hostname;
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const socket = io(`${protocol}//${host}:3005/console`, {
+            transports: ['websocket'],
+          });
+          consoleSocket.current = socket;
+
+          const token = localStorage.getItem('token');
+
+          socket.on('connect', () => {
+            setIsConsoleConnected(true);
+            terminal.writeln('\x1b[32m[OpenHostMC] Connesso al WebSocket del server.\x1b[0m');
+            socket.emit('join-console', { serverId, token });
+          });
+
+          socket.on('console-log', (data: string) => {
+            terminal.write(data);
+          });
+
+          socket.on('console-error', (err: string) => {
+            terminal.writeln(`\x1b[31m[Errore Console] ${err}\x1b[0m`);
+          });
+
+          socket.on('stats', (data: { cpu: number; ram: number }) => {
+            setStats(data);
+          });
+
+          socket.on('disconnect', () => {
+            setIsConsoleConnected(false);
+            terminal.writeln('\x1b[31m[OpenHostMC] Disconnesso dal WebSocket.\x1b[0m');
+          });
+
+          const handleResize = () => {
+            try {
+              fit.fit();
+            } catch {}
+          };
+          window.addEventListener('resize', handleResize);
+
+          let resizeObserver: ResizeObserver | null = null;
+          if (terminalRef.current && typeof ResizeObserver !== 'undefined') {
+            resizeObserver = new ResizeObserver(() => handleResize());
+            resizeObserver.observe(terminalRef.current);
+          }
+
+          setTimeout(handleResize, 150);
+          setTimeout(handleResize, 400);
         }
-
-        setTimeout(handleResize, 150);
-      }
-    );
+      );
+    }, 50);
 
     return () => {
       isDisposed = true;
+      clearTimeout(initTimer);
       try {
         fitAddon.current?.fit();
       } catch {}
@@ -417,16 +444,13 @@ function ServerManagementContent() {
         term.current.dispose();
         term.current = null;
       }
+      setIsConsoleConnected(false);
     };
-  }, [activeTab, serverId]);
+  }, [activeTab, serverId, loading]);
 
   const handleSendCommand = (e: React.FormEvent) => {
     e.preventDefault();
     if (!command.trim() || !consoleSocket.current || !serverId) return;
-    if (isOperator) {
-      alert('Il tuo ruolo attuale (Operatore) consente solo la visualizzazione della console.');
-      return;
-    }
     const token = localStorage.getItem('token');
     consoleSocket.current.emit('send-command', { serverId, command: command.trim(), token });
     term.current?.writeln(`\x1b[36m> ${command.trim()}\x1b[0m`);
@@ -1083,16 +1107,16 @@ function ServerManagementContent() {
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
                 placeholder={
-                  isOperator
-                    ? 'Invio comandi RCON disabilitato per il ruolo Operatore (sola visualizzazione log)'
+                  !isConsoleConnected
+                    ? 'In attesa di connessione alla console del server...'
                     : 'Inserisci un comando Minecraft (es. help, list, op Steve, say Buongiorno)...'
                 }
-                disabled={isOperator}
+                disabled={!isConsoleConnected}
                 className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 sm:py-3 outline-none focus:border-blue-500 text-xs font-mono text-zinc-100 placeholder-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
                 type="submit"
-                disabled={isOperator || !command.trim()}
+                disabled={!command.trim() || !isConsoleConnected}
                 className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
               >
                 <span>Invia</span>

@@ -75,8 +75,20 @@ function ConsoleInner() {
         term.current?.writeln('\x1b[31m[Sistema] Disconnesso dal server.\x1b[0m');
       });
 
-      const handleResize = () => fitAddon.current?.fit();
+      const handleResize = () => {
+        try {
+          fitAddon.current?.fit();
+        } catch {}
+      };
       window.addEventListener('resize', handleResize);
+
+      let resizeObserver: ResizeObserver | null = null;
+      if (terminalRef.current && typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => handleResize());
+        resizeObserver.observe(terminalRef.current);
+      }
+
+      setTimeout(handleResize, 150);
     });
 
     return () => {
@@ -102,53 +114,53 @@ function ConsoleInner() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col p-4 sm:p-6">
-      <div className="max-w-6xl w-full mx-auto flex-1 flex flex-col gap-4">
-        <div className="flex flex-wrap justify-between items-center bg-zinc-900 p-4 rounded-2xl border border-zinc-800 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col p-3 sm:p-6">
+      <div className="max-w-6xl w-full mx-auto flex-1 flex flex-col gap-3 sm:gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-zinc-900 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-zinc-800 gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
               <TerminalIcon className="w-5 h-5" />
             </div>
-            <div>
-              <h1 className="text-base font-bold text-white">Console Server</h1>
-              <p className="text-xs text-zinc-500 font-mono">{serverId}</p>
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-base font-bold text-white">Console Server</h1>
+              <p className="text-[11px] sm:text-xs text-zinc-500 font-mono truncate">{serverId}</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center text-xs">
+          <div className="grid grid-cols-3 sm:flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
+            <div className="bg-zinc-950 px-2.5 sm:px-3 py-1.5 rounded-lg border border-zinc-800 text-center text-xs">
               <p className="text-[10px] text-zinc-500 uppercase font-semibold">CPU</p>
               <p className="font-bold text-blue-400 font-mono">{stats.cpu}%</p>
             </div>
-            <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center text-xs">
+            <div className="bg-zinc-950 px-2.5 sm:px-3 py-1.5 rounded-lg border border-zinc-800 text-center text-xs">
               <p className="text-[10px] text-zinc-500 uppercase font-semibold">RAM</p>
-              <p className="font-bold text-emerald-400 font-mono">{stats.ram} MB</p>
+              <p className="font-bold text-emerald-400 font-mono truncate">{stats.ram} MB</p>
             </div>
             <Link
               href="/dashboard"
-              className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 border border-zinc-700"
+              className="px-3 sm:px-3.5 py-1.5 sm:py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg sm:rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 border border-zinc-700"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
+              <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
               <span>Dashboard</span>
             </Link>
           </div>
         </div>
 
-        <div className="flex-1 bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden relative min-h-[460px] shadow-2xl">
+        <div className="flex-1 bg-zinc-950 rounded-xl sm:rounded-2xl border border-zinc-800 overflow-hidden relative h-[360px] xs:h-[420px] sm:h-[480px] md:h-[560px] shadow-2xl">
           <div ref={terminalRef} className="absolute inset-0 p-3" />
         </div>
 
-        <form onSubmit={sendCommand} className="flex gap-2">
+        <form onSubmit={sendCommand} className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             placeholder="Inserisci un comando Minecraft (es. list, op Steve, say Buongiorno)..."
-            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 outline-none focus:border-blue-500 font-mono text-xs text-zinc-100 placeholder-zinc-500 transition-colors"
+            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 sm:py-3 outline-none focus:border-blue-500 font-mono text-xs text-zinc-100 placeholder-zinc-500 transition-colors"
           />
           <button
             type="submit"
             disabled={!command.trim()}
-            className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 px-6 py-3 rounded-xl font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer text-white"
+            className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer text-white w-full sm:w-auto shrink-0"
           >
             <span>Invia</span>
             <Send className="w-3.5 h-3.5" />

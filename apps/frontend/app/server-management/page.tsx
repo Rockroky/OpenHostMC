@@ -387,13 +387,28 @@ function ServerManagementContent() {
           term.current?.writeln('\x1b[31m[OpenHostMC] Disconnesso dal WebSocket.\x1b[0m');
         });
 
-        const handleResize = () => fitAddon.current?.fit();
+        const handleResize = () => {
+          try {
+            fitAddon.current?.fit();
+          } catch {}
+        };
         window.addEventListener('resize', handleResize);
+
+        let resizeObserver: ResizeObserver | null = null;
+        if (terminalRef.current && typeof ResizeObserver !== 'undefined') {
+          resizeObserver = new ResizeObserver(() => handleResize());
+          resizeObserver.observe(terminalRef.current);
+        }
+
+        setTimeout(handleResize, 150);
       }
     );
 
     return () => {
       isDisposed = true;
+      try {
+        fitAddon.current?.fit();
+      } catch {}
       if (consoleSocket.current) {
         consoleSocket.current.disconnect();
         consoleSocket.current = null;
@@ -674,29 +689,31 @@ function ServerManagementContent() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       {/* Top Navbar */}
       <header className="bg-zinc-900/80 border-b border-zinc-800 sticky top-0 z-30 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <Link
               href="/dashboard"
-              className="text-xs font-medium text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors"
+              className="text-xs font-medium text-zinc-400 hover:text-white flex items-center gap-1 transition-colors shrink-0"
+              title="Torna alla Dashboard"
             >
-              <span>← Dashboard</span>
+              <span>← <span className="hidden sm:inline">Dashboard</span></span>
             </Link>
-            <span className="text-zinc-600">/</span>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-sm sm:text-base">{server?.name || 'Server'}</span>
-              <span className="text-xs font-mono text-zinc-500 hidden sm:inline">({serverId.slice(0, 8)}...)</span>
+            <span className="text-zinc-600 shrink-0">/</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <span className="font-bold text-white text-xs sm:text-base truncate max-w-[120px] xs:max-w-[160px] sm:max-w-xs">{server?.name || 'Server'}</span>
+              <span className="text-[10px] sm:text-xs font-mono text-zinc-500 hidden md:inline shrink-0">({serverId.slice(0, 8)}...)</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Quick Share Button */}
             <button
               onClick={() => setIsShareModalOpen(true)}
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-1.5 cursor-pointer"
+              className="px-2.5 sm:px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-1.5 cursor-pointer"
+              title="Condividi server"
             >
-              <Share2 className="w-3.5 h-3.5 text-purple-400" />
-              <span>Condividi</span>
+              <Share2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span className="hidden sm:inline">Condividi</span>
             </button>
 
             {/* Quick Power Controls */}
@@ -704,29 +721,30 @@ function ServerManagementContent() {
               <button
                 onClick={handleStart}
                 disabled={actionLoading}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="px-3 sm:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Avvia Server"
               >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Avvia Server</span>
+                <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                <span className="text-xs">Avvia<span className="hidden sm:inline"> Server</span></span>
               </button>
             ) : (
               <>
                 <button
                   onClick={handleRestart}
                   disabled={actionLoading}
-                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-1.5 cursor-pointer"
-                  title="Riavvia"
+                  className="px-2.5 sm:px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-1.5 cursor-pointer"
+                  title="Riavvia server"
                 >
-                  <RotateCw className="w-3.5 h-3.5 text-blue-400" />
+                  <RotateCw className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                   <span className="hidden sm:inline">Riavvia</span>
                 </button>
                 <button
                   onClick={handleStop}
                   disabled={actionLoading}
-                  className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-                  title="Arresta"
+                  className="px-2.5 sm:px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                  title="Arresta server"
                 >
-                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <Square className="w-3.5 h-3.5 fill-current shrink-0" />
                   <span className="hidden sm:inline">Arresta</span>
                 </button>
               </>
@@ -737,15 +755,15 @@ function ServerManagementContent() {
 
       {/* Operator Banner (if user has OPERATOR role) */}
       {isOperator && (
-        <div className="bg-blue-950/40 border-b border-blue-900/50 px-4 sm:px-8 py-3">
-          <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-blue-300">
+        <div className="bg-blue-950/40 border-b border-blue-900/50 px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-blue-300">
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4 text-blue-400 shrink-0" />
               <span>
-                <strong>Ruolo: Operatore</strong> — Hai i permessi per visualizzare lo stato, consultare la console, avviare e riavviare il server.
+                <strong>Ruolo: Operatore</strong> — Modalità sola lettura, log console e controlli rapidi.
               </span>
             </div>
-            <span className="hidden md:inline px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px]">
+            <span className="self-start sm:self-auto px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20 text-[10px] shrink-0">
               Sola Lettura / Controllo Rapido
             </span>
           </div>
@@ -777,87 +795,87 @@ function ServerManagementContent() {
       )}
 
       {/* Tabs Navigation Header */}
-      <div className="border-b border-zinc-800 bg-zinc-900/60 sticky top-[57px] z-20 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 sm:gap-2 overflow-x-auto py-2.5 no-scrollbar scroll-smooth">
+      <div className="border-b border-zinc-800 bg-zinc-900/80 sticky top-[49px] sm:top-[57px] z-20 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-2 sm:py-2.5 no-scrollbar scroll-smooth">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer ${
               activeTab === 'overview'
                 ? 'bg-zinc-800 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <Activity className="w-4 h-4 text-emerald-400" />
+            <Activity className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>Panoramica</span>
           </button>
 
           <button
             onClick={() => setActiveTab('console')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer ${
               activeTab === 'console'
                 ? 'bg-zinc-800 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <Terminal className="w-4 h-4 text-blue-400" />
+            <Terminal className="w-4 h-4 text-blue-400 shrink-0" />
             <span>Console Live</span>
           </button>
 
           <button
             onClick={() => setActiveTab('config')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer ${
               activeTab === 'config'
                 ? 'bg-zinc-800 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <Sliders className="w-4 h-4 text-amber-400" />
+            <Sliders className="w-4 h-4 text-amber-400 shrink-0" />
             <span>Configurazione</span>
-            {isOperator && <Lock className="w-3 h-3 text-zinc-500" />}
+            {isOperator && <Lock className="w-3 h-3 text-zinc-500 shrink-0" />}
           </button>
 
           <button
             onClick={() => setActiveTab('players')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer ${
               activeTab === 'players'
                 ? 'bg-zinc-800 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <Users className="w-4 h-4 text-purple-400" />
+            <Users className="w-4 h-4 text-purple-400 shrink-0" />
             <span>Giocatori & Whitelist</span>
-            {isOperator && <Lock className="w-3 h-3 text-zinc-500" />}
+            {isOperator && <Lock className="w-3 h-3 text-zinc-500 shrink-0" />}
           </button>
 
           <button
             onClick={() => setActiveTab('files')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer ${
               activeTab === 'files'
                 ? 'bg-zinc-800 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <FolderTree className="w-4 h-4 text-emerald-400" />
+            <FolderTree className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>Mod & File</span>
-            {isOperator && <Lock className="w-3 h-3 text-zinc-500" />}
+            {isOperator && <Lock className="w-3 h-3 text-zinc-500 shrink-0" />}
           </button>
 
           <button
             onClick={() => setActiveTab('share')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
+            className={`px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 shrink-0 cursor-pointer ${
               activeTab === 'share'
                 ? 'bg-zinc-800 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <Share2 className="w-4 h-4 text-purple-400" />
+            <Share2 className="w-4 h-4 text-purple-400 shrink-0" />
             <span>Condivisione & Team</span>
           </button>
         </div>
       </div>
 
       {/* Tab Contents */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex-1 w-full space-y-4 sm:space-y-6 overflow-x-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -869,109 +887,112 @@ function ServerManagementContent() {
           >
             {/* TAB 1: PANORAMICA */}
             {activeTab === 'overview' && server && (
-          <div className="space-y-6 animate-in fade-in duration-150">
+          <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-150">
             {/* Server Identity Card */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-inner shrink-0">
-                  <Server className="w-7 h-7" />
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
+              <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-inner shrink-0">
+                  <Server className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-bold text-white">{server.name}</h2>
-                    <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <h2 className="text-lg sm:text-xl font-bold text-white truncate max-w-full">{server.name}</h2>
+                    <span className="text-[11px] sm:text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 shrink-0">
                       <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
                       {server.status}
                     </span>
                   </div>
-                  <p className="text-xs text-zinc-400 font-mono mt-1">
+                  <p className="text-xs text-zinc-400 font-mono mt-1 break-all">
                     Indirizzo: <span className="text-zinc-200 select-all font-semibold">{server.subdomain || server.name}.openhostmc.net{server.port ? `:${server.port}` : ''}</span>
                   </p>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-2.5">
+              <div className="grid grid-cols-3 sm:flex items-center gap-2 sm:gap-2.5 w-full lg:w-auto shrink-0">
                 <button
                   onClick={handleStart}
                   disabled={actionLoading || isRunning}
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer shadow-md shadow-emerald-950/20"
+                  className="px-3 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer shadow-md shadow-emerald-950/20"
+                  title="Avvia server"
                 >
-                  <Play className="w-4 h-4 fill-current" />
+                  <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current shrink-0" />
                   <span>Avvia</span>
                 </button>
                 <button
                   onClick={handleRestart}
                   disabled={actionLoading || isStopped}
-                  className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800/40 disabled:text-zinc-600 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-2 cursor-pointer"
+                  className="px-3 sm:px-4 py-2 sm:py-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800/40 disabled:text-zinc-600 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer"
+                  title="Riavvia server"
                 >
-                  <RotateCw className="w-4 h-4 text-blue-400" />
+                  <RotateCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 shrink-0" />
                   <span>Riavvia</span>
                 </button>
                 <button
                   onClick={handleStop}
                   disabled={actionLoading || isStopped}
-                  className="px-4 py-2.5 bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 disabled:bg-zinc-800/40 disabled:text-zinc-600 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-2 cursor-pointer"
+                  className="px-3 sm:px-4 py-2 sm:py-2.5 bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 disabled:bg-zinc-800/40 disabled:text-zinc-600 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer"
+                  title="Arresta server"
                 >
-                  <Square className="w-4 h-4 fill-current text-red-400" />
+                  <Square className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current text-red-400 shrink-0" />
                   <span>Arresta</span>
                 </button>
               </div>
             </div>
 
             {/* Hardware & Spec Metrics */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-1.5 sm:space-y-2">
                 <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <HardDrive className="w-4 h-4 text-emerald-400" />
+                    <HardDrive className="w-4 h-4 text-emerald-400 shrink-0" />
                     Allocazione RAM
                   </span>
                   <span className="text-[11px] font-mono text-zinc-500">Dedicata</span>
                 </div>
-                <div className="text-2xl font-bold text-white">
+                <div className="text-xl sm:text-2xl font-bold text-white break-words">
                   {(server.allocated_ram_mb ? server.allocated_ram_mb / 1024 : 2).toFixed(1)} GB
                 </div>
                 <div className="text-[11px] text-zinc-500">Memoria heap JVM isolata</div>
               </div>
 
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-2">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-1.5 sm:space-y-2">
                 <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <Cpu className="w-4 h-4 text-blue-400" />
+                    <Cpu className="w-4 h-4 text-blue-400 shrink-0" />
                     Core CPU
                   </span>
                   <span className="text-[11px] font-mono text-zinc-500">Docker limit</span>
                 </div>
-                <div className="text-2xl font-bold text-white">
+                <div className="text-xl sm:text-2xl font-bold text-white break-words">
                   {server.allocated_cpu_cores || 1.0} Cores
                 </div>
                 <div className="text-[11px] text-zinc-500">Thread dedicati con CFS pool</div>
               </div>
 
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-2">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-1.5 sm:space-y-2">
                 <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-purple-400" />
+                    <Layers className="w-4 h-4 text-purple-400 shrink-0" />
                     Piattaforma
                   </span>
                   <span className="text-[11px] font-mono text-zinc-500">Versione</span>
                 </div>
-                <div className="text-2xl font-bold text-white truncate">
+                <div className="text-xl sm:text-2xl font-bold text-white truncate">
                   {server.mc_type}
                 </div>
-                <div className="text-[11px] text-zinc-500 font-mono">Minecraft {server.mc_version}</div>
+                <div className="text-[11px] text-zinc-500 font-mono truncate">Minecraft {server.mc_version}</div>
               </div>
 
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-2">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-1.5 sm:space-y-2">
                 <div className="text-zinc-400 text-xs font-medium flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <Globe className="w-4 h-4 text-amber-400" />
+                    <Globe className="w-4 h-4 text-amber-400 shrink-0" />
                     Porta Rete
                   </span>
                   <span className="text-[11px] font-mono text-zinc-500">TCP</span>
                 </div>
-                <div className="text-2xl font-mono font-bold text-white">
+                <div className="text-xl sm:text-2xl font-mono font-bold text-white break-words">
                   {server.port ? `:${server.port}` : 'Allocata all\'avvio'}
                 </div>
                 <div className="text-[11px] text-zinc-500">Protocollo Minecraft standard</div>
@@ -979,10 +1000,10 @@ function ServerManagementContent() {
             </div>
 
             {/* Quick shortcuts grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 pt-1 sm:pt-2">
               <button
                 onClick={() => setActiveTab('console')}
-                className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-5 rounded-2xl text-left transition-all space-y-2 cursor-pointer group"
+                className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-4 sm:p-5 rounded-xl sm:rounded-2xl text-left transition-all space-y-2 cursor-pointer group"
               >
                 <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-105 transition-transform">
                   <Terminal className="w-4 h-4" />
@@ -993,7 +1014,7 @@ function ServerManagementContent() {
 
               <button
                 onClick={() => setActiveTab('config')}
-                className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-5 rounded-2xl text-left transition-all space-y-2 cursor-pointer group"
+                className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-4 sm:p-5 rounded-xl sm:rounded-2xl text-left transition-all space-y-2 cursor-pointer group"
               >
                 <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:scale-105 transition-transform">
                   <Sliders className="w-4 h-4" />
@@ -1007,7 +1028,7 @@ function ServerManagementContent() {
 
               <button
                 onClick={() => setActiveTab('share')}
-                className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-5 rounded-2xl text-left transition-all space-y-2 cursor-pointer group"
+                className="bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-4 sm:p-5 rounded-xl sm:rounded-2xl text-left transition-all space-y-2 cursor-pointer group sm:col-span-2 lg:col-span-1"
               >
                 <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-transform">
                   <Share2 className="w-4 h-4" />
@@ -1021,11 +1042,11 @@ function ServerManagementContent() {
 
         {/* TAB 2: CONSOLE LIVE */}
         {activeTab === 'console' && (
-          <div className="space-y-4 animate-in fade-in duration-150">
+          <div className="space-y-3 sm:space-y-4 animate-in fade-in duration-150">
             {/* Console Toolbar */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                   <Terminal className="w-5 h-5" />
                 </div>
                 <div>
@@ -1038,12 +1059,12 @@ function ServerManagementContent() {
               </div>
 
               {/* Resource stats from socket */}
-              <div className="flex items-center gap-6 text-xs">
-                <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center">
+              <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-3 text-xs">
+                <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center flex-1 sm:flex-initial">
                   <span className="text-zinc-500 block text-[10px] uppercase font-semibold">CPU Container</span>
                   <span className="font-mono font-bold text-blue-400">{stats.cpu}%</span>
                 </div>
-                <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center">
+                <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center flex-1 sm:flex-initial">
                   <span className="text-zinc-500 block text-[10px] uppercase font-semibold">RAM Utilizzata</span>
                   <span className="font-mono font-bold text-emerald-400">{stats.ram} MB</span>
                 </div>
@@ -1051,12 +1072,12 @@ function ServerManagementContent() {
             </div>
 
             {/* Terminal View */}
-            <div className="bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden shadow-2xl relative min-h-[460px]">
+            <div className="bg-zinc-950 rounded-xl sm:rounded-2xl border border-zinc-800 overflow-hidden shadow-2xl relative h-[320px] xs:h-[380px] sm:h-[460px] md:h-[520px]">
               <div ref={terminalRef} className="absolute inset-0 p-3" />
             </div>
 
             {/* Command input form */}
-            <form onSubmit={handleSendCommand} className="flex gap-2">
+            <form onSubmit={handleSendCommand} className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 value={command}
@@ -1067,12 +1088,12 @@ function ServerManagementContent() {
                     : 'Inserisci un comando Minecraft (es. help, list, op Steve, say Buongiorno)...'
                 }
                 disabled={isOperator}
-                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 outline-none focus:border-blue-500 text-xs font-mono text-zinc-100 placeholder-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 sm:py-3 outline-none focus:border-blue-500 text-xs font-mono text-zinc-100 placeholder-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
                 type="submit"
                 disabled={isOperator || !command.trim()}
-                className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-6 py-3 rounded-xl font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
               >
                 <span>Invia</span>
                 <ArrowRight className="w-4 h-4" />
@@ -1097,13 +1118,13 @@ function ServerManagementContent() {
             )}
 
             {/* Filter and search */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-zinc-900 p-4 rounded-2xl border border-zinc-800">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 bg-zinc-900 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-zinc-800">
               <div className="flex items-center gap-2">
-                <Sliders className="w-5 h-5 text-amber-400" />
+                <Sliders className="w-5 h-5 text-amber-400 shrink-0" />
                 <h3 className="font-bold text-sm text-white">Parametri server.properties</h3>
               </div>
 
-              <div className="relative max-w-xs w-full">
+              <div className="relative w-full sm:max-w-xs">
                 <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
@@ -1235,39 +1256,39 @@ function ServerManagementContent() {
 
             {/* Floating Save Actions Bar */}
             {isManagerOrOwner && (
-              <div className="sticky bottom-6 z-20 bg-zinc-900/95 border border-zinc-700 rounded-2xl p-4 shadow-2xl backdrop-blur-md flex items-center justify-between gap-4">
+              <div className="sticky bottom-4 sm:bottom-6 z-20 bg-zinc-900/95 border border-zinc-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-2xl backdrop-blur-md flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
                 <div className="text-xs">
                   {hasModifiedProperties ? (
                     <span className="text-amber-400 font-semibold flex items-center gap-1.5">
-                      <AlertCircle className="w-4 h-4" />
-                      Hai modifiche non salvate
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>Hai modifiche non salvate</span>
                     </span>
                   ) : (
                     <span className="text-zinc-400">Tutte le modifiche sono sincronizzate.</span>
                   )}
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="grid grid-cols-2 sm:flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
                     onClick={() => setProperties(originalProperties)}
                     disabled={!hasModifiedProperties || savingProperties}
-                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-zinc-300 rounded-xl text-xs font-semibold transition-colors"
+                    className="px-3 sm:px-4 py-2 sm:py-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-zinc-300 rounded-xl text-xs font-semibold transition-colors text-center"
                   >
-                    Annulla Modifiche
+                    Annulla
                   </button>
                   <button
                     onClick={handleSaveProperties}
                     disabled={savingProperties}
-                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-emerald-950/20 flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 sm:px-5 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-emerald-950/20 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     {savingProperties ? (
                       <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
                         <span>Salvataggio...</span>
                       </>
                     ) : (
                       <>
-                        <Check className="w-3.5 h-3.5" />
+                        <Check className="w-3.5 h-3.5 shrink-0" />
                         <span>Salva Proprietà</span>
                       </>
                     )}
@@ -1293,11 +1314,11 @@ function ServerManagementContent() {
               </div>
             )}
 
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-800">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 sm:space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 border-b border-zinc-800">
                 <div>
-                  <h3 className="font-bold text-base text-white flex items-center gap-2">
-                    <Users className="w-5 h-5 text-purple-400" />
+                  <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2">
+                    <Users className="w-5 h-5 text-purple-400 shrink-0" />
                     Gestione Whitelist (whitelist.json)
                   </h3>
                   <p className="text-xs text-zinc-400 mt-0.5">
@@ -1305,7 +1326,7 @@ function ServerManagementContent() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 bg-zinc-950 px-3 py-1.5 rounded-xl border border-zinc-800 text-xs">
+                <div className="flex items-center gap-2 bg-zinc-950 px-3 py-1.5 rounded-xl border border-zinc-800 text-xs self-start sm:self-auto">
                   <span className="text-zinc-400">Stato Whitelist:</span>
                   <span className={`font-semibold ${properties['white-list'] === 'true' ? 'text-emerald-400' : 'text-zinc-400'}`}>
                     {properties['white-list'] === 'true' ? 'Attiva (Chiuso)' : 'Disattivata (Aperto a tutti)'}
@@ -1315,7 +1336,7 @@ function ServerManagementContent() {
 
               {/* Add player form */}
               {isManagerOrOwner && (
-                <form onSubmit={handleAddPlayer} className="flex gap-2">
+                <form onSubmit={handleAddPlayer} className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={newPlayerName}
@@ -1327,12 +1348,12 @@ function ServerManagementContent() {
                   <button
                     type="submit"
                     disabled={isWhitelistLoading || !newPlayerName.trim()}
-                    className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                    className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0 w-full sm:w-auto"
                   >
                     {isWhitelistLoading ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
                     ) : (
-                      <Plus className="w-4 h-4" />
+                      <Plus className="w-4 h-4 shrink-0" />
                     )}
                     <span>Aggiungi Giocatore</span>
                   </button>
@@ -1340,7 +1361,7 @@ function ServerManagementContent() {
               )}
 
               {/* Whitelist list */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                 {whitelist.length === 0 ? (
                   <div className="col-span-full py-12 text-center text-xs text-zinc-500 border border-dashed border-zinc-800 rounded-xl bg-zinc-950/40">
                     Nessun giocatore registrato nella whitelist.
@@ -1357,14 +1378,14 @@ function ServerManagementContent() {
                         </div>
                         <div className="min-w-0">
                           <div className="font-semibold text-xs text-zinc-200 truncate">{player.name}</div>
-                          <div className="font-mono text-[10px] text-zinc-500 truncate w-28">{player.uuid}</div>
+                          <div className="font-mono text-[10px] text-zinc-500 truncate max-w-[120px] xs:max-w-[150px] sm:max-w-[180px]">{player.uuid}</div>
                         </div>
                       </div>
 
                       {isManagerOrOwner && (
                         <button
                           onClick={() => handleRemovePlayer(player.name)}
-                          className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-80 group-hover:opacity-100"
+                          className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-80 group-hover:opacity-100 shrink-0"
                           title="Rimuovi dalla whitelist"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -1394,7 +1415,7 @@ function ServerManagementContent() {
             )}
 
             {/* Backups & Downloads */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-xl space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
                 <div>
                   <h3 className="font-bold text-sm text-white">Esportazione & Backup Istantanei</h3>
@@ -1402,20 +1423,20 @@ function ServerManagementContent() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 w-full sm:w-auto">
                 <button
                   onClick={handleExportWorld}
-                  className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-2 cursor-pointer"
+                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Download className="w-4 h-4 text-emerald-400" />
+                  <Download className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>Scarica Mondo (.zip)</span>
                 </button>
 
                 <button
                   onClick={handleExportMods}
-                  className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-2 cursor-pointer"
+                  className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Download className="w-4 h-4 text-blue-400" />
+                  <Download className="w-4 h-4 text-blue-400 shrink-0" />
                   <span>Scarica Cartella /mods (.zip)</span>
                 </button>
               </div>
@@ -1423,7 +1444,7 @@ function ServerManagementContent() {
 
             {/* Upload Section (Manager & Owner) */}
             {isManagerOrOwner && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-5">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 sm:space-y-5">
                 <div>
                   <h3 className="font-bold text-sm text-white">Caricamento Mod & Modpack</h3>
                   <p className="text-xs text-zinc-400">
@@ -1432,7 +1453,7 @@ function ServerManagementContent() {
                 </div>
 
                 <form onSubmit={handleUploadMods} className="space-y-4">
-                  <div className="p-8 bg-zinc-950/60 border-2 border-dashed border-zinc-800 hover:border-emerald-500/40 rounded-2xl text-center space-y-3 transition-colors">
+                  <div className="p-5 sm:p-8 bg-zinc-950/60 border-2 border-dashed border-zinc-800 hover:border-emerald-500/40 rounded-xl sm:rounded-2xl text-center space-y-3 transition-colors">
                     <Upload className="w-8 h-8 text-zinc-500 mx-auto" />
                     <div>
                       <p className="text-xs font-semibold text-zinc-200">Seleziona o trascina file .jar o .zip</p>
@@ -1449,26 +1470,26 @@ function ServerManagementContent() {
                         file:rounded-xl file:border-0
                         file:text-xs file:font-semibold
                         file:bg-zinc-800 file:text-zinc-200
-                        hover:file:bg-zinc-700 cursor-pointer max-w-sm mx-auto"
+                        hover:file:bg-zinc-700 cursor-pointer max-w-full sm:max-w-sm mx-auto"
                     />
                   </div>
 
                   {modFiles.length > 0 && (
-                    <div className="flex items-center justify-between bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
                       <span className="text-xs text-zinc-300 font-medium">{modFiles.length} file pronti per il caricamento</span>
                       <button
                         type="submit"
                         disabled={isModUploading}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto"
                       >
                         {isModUploading ? (
                           <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
                             <span>Caricamento in corso...</span>
                           </>
                         ) : (
                           <>
-                            <Upload className="w-3.5 h-3.5" />
+                            <Upload className="w-3.5 h-3.5 shrink-0" />
                             <span>Avvia Caricamento</span>
                           </>
                         )}
@@ -1485,10 +1506,10 @@ function ServerManagementContent() {
                       {uploadResults.map((r, i) => (
                         <div
                           key={i}
-                          className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 flex items-center justify-between text-xs"
+                          className="bg-zinc-950 p-2.5 rounded-lg border border-zinc-800 flex items-center justify-between gap-2 text-xs"
                         >
-                          <span className="font-mono text-zinc-300 truncate max-w-md">{r.file}</span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          <span className="font-mono text-zinc-300 truncate max-w-[140px] xs:max-w-[200px] sm:max-w-xs md:max-w-md">{r.file}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
                             r.status === 'extracted' || r.status === 'uploaded'
                               ? 'bg-emerald-500/10 text-emerald-400'
                               : 'bg-red-500/10 text-red-400'
@@ -1507,38 +1528,38 @@ function ServerManagementContent() {
 
         {/* TAB 6: CONDIVISIONE & TEAM */}
         {activeTab === 'share' && server && (
-          <div className="space-y-6 animate-in fade-in duration-150">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+          <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-150">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 sm:space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-4 border-b border-zinc-800">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
                     <Share2 className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-base text-white">Condivisione Server & Gestione Ruoli</h3>
-                    <p className="text-xs text-zinc-400">Invita amici e staff a collaborare sul server con autorizzazioni sicure.</p>
+                    <h3 className="font-bold text-sm sm:text-base text-white">Condivisione Server & Gestione Ruoli</h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">Invita amici e staff a collaborare sul server con autorizzazioni sicure.</p>
                   </div>
                 </div>
 
                 <button
                   onClick={() => setIsShareModalOpen(true)}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-purple-950/20 flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-purple-950/20 flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto shrink-0"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-4 h-4 shrink-0" />
                   <span>Invita Collaboratore</span>
                 </button>
               </div>
 
               {/* Informative tier card */}
-              <div className="bg-zinc-950/70 border border-zinc-800 rounded-xl p-5 space-y-3">
+              <div className="bg-zinc-950/70 border border-zinc-800 rounded-xl p-4 sm:p-5 space-y-3">
                 <h4 className="text-xs font-bold text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                   Gerarchia dei Permessi
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 text-xs">
                   <div className="p-3.5 rounded-lg bg-zinc-900 border border-zinc-800 space-y-1.5">
                     <div className="flex items-center gap-1.5 font-bold text-purple-300">
-                      <Shield className="w-4 h-4 text-purple-400" />
+                      <Shield className="w-4 h-4 text-purple-400 shrink-0" />
                       Ruolo: Manager
                     </div>
                     <p className="text-zinc-400 leading-relaxed">
@@ -1547,7 +1568,7 @@ function ServerManagementContent() {
                   </div>
                   <div className="p-3.5 rounded-lg bg-zinc-900 border border-zinc-800 space-y-1.5">
                     <div className="flex items-center gap-1.5 font-bold text-blue-300">
-                      <UserIcon className="w-4 h-4 text-blue-400" />
+                      <UserIcon className="w-4 h-4 text-blue-400 shrink-0" />
                       Ruolo: Operatore
                     </div>
                     <p className="text-zinc-400 leading-relaxed">
@@ -1565,19 +1586,19 @@ function ServerManagementContent() {
 
                 <div className="space-y-2">
                   {/* Owner row */}
-                  <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5 flex items-center justify-between">
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center font-bold text-emerald-400 uppercase text-xs">
+                      <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center font-bold text-emerald-400 uppercase text-xs shrink-0">
                         {server.owner?.username?.charAt(0) || 'P'}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="font-semibold text-xs text-white flex items-center gap-2">
-                          <span>{server.owner?.username || 'Proprietario'}</span>
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
+                          <span className="truncate">{server.owner?.username || 'Proprietario'}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold shrink-0">
                             Proprietario
                           </span>
                         </div>
-                        <span className="text-[11px] text-zinc-500">{server.owner?.email || 'Account primario'}</span>
+                        <span className="text-[11px] text-zinc-500 truncate block">{server.owner?.email || 'Account primario'}</span>
                       </div>
                     </div>
                   </div>
@@ -1585,15 +1606,15 @@ function ServerManagementContent() {
                   {/* Collaborators row preview */}
                   {server.collaborators && server.collaborators.length > 0 ? (
                     server.collaborators.map((c) => (
-                      <div key={c.id} className="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5 flex items-center justify-between">
+                      <div key={c.id} className="bg-zinc-950 border border-zinc-800 rounded-xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-zinc-300 uppercase text-xs">
+                          <div className="w-9 h-9 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-zinc-300 uppercase text-xs shrink-0">
                             {c.user?.username?.charAt(0) || 'U'}
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <div className="font-semibold text-xs text-white flex items-center gap-2">
-                              <span>{c.user?.username || 'Collaboratore'}</span>
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              <span className="truncate">{c.user?.username || 'Collaboratore'}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
                                 c.role === 'MANAGER'
                                   ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
                                   : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
@@ -1601,7 +1622,7 @@ function ServerManagementContent() {
                                 {c.role || 'OPERATOR'}
                               </span>
                             </div>
-                            <span className="text-[11px] text-zinc-500">{c.user?.email}</span>
+                            <span className="text-[11px] text-zinc-500 truncate block">{c.user?.email}</span>
                           </div>
                         </div>
                       </div>

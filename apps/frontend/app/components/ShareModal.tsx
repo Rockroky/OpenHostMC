@@ -213,16 +213,16 @@ export default function ShareModal({
                 </button>
               ) : (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-xl p-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-zinc-950 border border-zinc-800 rounded-xl p-2">
                     <input
                       type="text"
                       readOnly
                       value={getFullShareUrl()}
-                      className="bg-transparent text-xs font-mono text-zinc-300 px-2 flex-1 outline-none select-all"
+                      className="bg-transparent text-xs font-mono text-zinc-300 px-2 py-1.5 flex-1 outline-none select-all min-w-0 break-all"
                     />
                     <button
                       onClick={handleCopy}
-                      className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 ${
+                      className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer w-full sm:w-auto ${
                         copied
                           ? 'bg-emerald-600 text-white'
                           : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'

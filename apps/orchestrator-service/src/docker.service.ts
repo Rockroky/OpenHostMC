@@ -125,12 +125,13 @@ export class DockerService {
         `MEMORY=${options.ramMb}M`,
         'ENABLE_WHITELIST=FALSE',
         'ENABLE_RCON=TRUE',
+        'CREATE_CONSOLE_IN_PIPE=true',
         `RCON_PASSWORD=${rconPassword}`,
         `RCON_PORT=${rconPort}`,
       ];
 
       this.logger.log(
-        `ENABLE_RCON=TRUE, ENABLE_WHITELIST=FALSE for container ${containerName}`,
+        `ENABLE_RCON=TRUE, CREATE_CONSOLE_IN_PIPE=true for container ${containerName}`,
       );
 
       for (const [propKey, envKey] of Object.entries(this.ENV_MAPPING)) {
@@ -164,11 +165,14 @@ export class DockerService {
         // Se 404, il container non esiste, procediamo normalmente
       }
 
-      // 3. Crea il container con Bind Mount e limiti risorse
+      // 3. Crea il container con Bind Mount, TTY interattivo, Pipe Console e limiti risorse
       const container = await this.docker.createContainer({
         Image: 'itzg/minecraft-server:latest',
         name: containerName,
         Env: envVars,
+        Tty: true,
+        OpenStdin: true,
+        StdinOnce: false,
         HostConfig: {
           Binds: [`${hostDataPath}:/data`],
           PortBindings: {
@@ -289,36 +293,86 @@ export class DockerService {
     }
   }
 
-  async executeRconCommand(serverId: string, command: string): Promise<void> {
+  async executeRconCommand(serverId: string, command: string): Promise<string> {
     const containerName = this.getContainerName(serverId);
     try {
       const container = this.docker.getContainer(containerName);
       const inspect = await container.inspect();
       if (!inspect.State.Running) {
         this.logger.warn(
-          `Container ${containerName} not running, skipping RCON command`,
+          `Container ${containerName} non in esecuzione, salto comando console`,
         );
-        return;
+        return '';
       }
-      // Use the existing RCON client logic (assumed to be implemented elsewhere or here)
-      // For simplicity, we exec 'rcon-cli' inside container (requires rcon-cli installed)
+
+      const cleanCmd = command.trim();
+      const cmdParts = cleanCmd.split(/\s+/);
+
+      // 1. TENTATIVO CONSOLE DIRETTA (Nativo itzg/minecraft-server via mc-send-to-console)
+      // Invia il comando direttamente allo standard input / pipe (/tmp/minecraft-console-in).
+      // Minecraft lo esegue come autentico comando console da terminale:
+      // - Nessuna connessione socket RCON
+      // - Nessun rumore "Thread RCON Client started / shutting down"
+      // - Output stampato direttamente sui log del server (e inviato al websocket)
+      try {
+        const execDirect = await container.exec({
+          Cmd: ['mc-send-to-console', ...cmdParts],
+          AttachStdout: true,
+          AttachStderr: true,
+        });
+        const streamDirect = await execDirect.start({});
+        let directOutput = '';
+        await new Promise<void>((resolve, reject) => {
+          streamDirect.on('data', (chunk: Buffer) => {
+            const text =
+              chunk.length > 8 ? chunk.toString('utf8', 8) : chunk.toString('utf8');
+            directOutput += text;
+          });
+          streamDirect.on('end', () => resolve());
+          streamDirect.on('error', reject);
+        });
+
+        const inspectExec = await execDirect.inspect();
+        if (inspectExec.ExitCode === 0) {
+          this.logger.log(`✅ Comando console eseguito direttamente: ${cleanCmd}`);
+          return directOutput;
+        }
+        this.logger.debug(
+          `mc-send-to-console non disponibile (exit ${inspectExec.ExitCode}), passaggio a rcon-cli`,
+        );
+      } catch (err: any) {
+        this.logger.debug(
+          `mc-send-to-console non riuscito (${err.message}), passaggio a rcon-cli`,
+        );
+      }
+
+      // 2. FALLBACK RCON (rcon-cli)
+      // Se il container non ha la console pipe attiva, usiamo rcon-cli ma catturiamo l'output
+      // per restituirlo al client invece di perderlo.
       const exec = await container.exec({
-        Cmd: ['rcon-cli', command],
+        Cmd: ['rcon-cli', cleanCmd],
         AttachStdout: true,
         AttachStderr: true,
       });
       const stream = await exec.start({});
-      await new Promise((resolve, reject) => {
-        stream.on('end', resolve);
+      let rconOutput = '';
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', (chunk: Buffer) => {
+          const text =
+            chunk.length > 8 ? chunk.toString('utf8', 8) : chunk.toString('utf8');
+          rconOutput += text;
+        });
+        stream.on('end', () => resolve());
         stream.on('error', reject);
       });
-      this.logger.log(`RCON command executed: ${command}`);
+      this.logger.log(`✅ Comando console eseguito via RCON: ${cleanCmd}`);
+      return rconOutput;
     } catch (error) {
       if (error.statusCode === 404) {
-        this.logger.warn(`Container ${containerName} not found, skipping RCON`);
-        return;
+        this.logger.warn(`Container ${containerName} non trovato, salto comando`);
+        return '';
       }
-      this.logger.error(`RCON error for ${containerName}: ${error.message}`);
+      this.logger.error(`Errore esecuzione comando per ${containerName}: ${error.message}`);
       throw error;
     }
   }

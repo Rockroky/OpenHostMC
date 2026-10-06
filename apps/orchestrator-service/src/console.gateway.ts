@@ -180,7 +180,22 @@ export class ConsoleGateway
       logStream.on('data', (chunk: Buffer) => {
         const str =
           chunk.length > 8 ? chunk.toString('utf8', 8) : chunk.toString('utf8');
-        client.emit('console-log', str);
+
+        // Filtra lo spam rumoroso delle connessioni/disconnessioni RCON interne di Minecraft
+        const lines = str.split('\n');
+        const cleanLines = lines.filter((line) => {
+          const isRconNoise =
+            line.includes('Thread RCON Client') &&
+            (line.includes('started') || line.includes('shutting down'));
+          return !isRconNoise;
+        });
+
+        if (cleanLines.length > 0) {
+          const cleanStr = cleanLines.join('\n');
+          if (cleanStr.trim().length > 0 || str.endsWith('\n')) {
+            client.emit('console-log', cleanStr);
+          }
+        }
       });
       logStream.on('error', (err: Error) => {
         this.logger.error(
@@ -308,10 +323,15 @@ export class ConsoleGateway
     }
 
     try {
-      await this.dockerService.executeRconCommand(
+      const output = await this.dockerService.executeRconCommand(
         data.serverId,
         trimmedCommand,
       );
+      // Se il comando ha restituito un output testuale immediato (es. via rcon-cli),
+      // invialo alla console così l'utente vede subito la risposta!
+      if (output && output.trim()) {
+        client.emit('console-log', `${output.trim()}\r\n`);
+      }
     } catch (error) {
       client.emit(
         'console-error',

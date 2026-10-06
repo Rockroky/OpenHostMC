@@ -28,7 +28,14 @@ import { ServerPropertiesController } from './server-properties.controller';
     ScheduleModule.forRoot(),
     AuthModule,
   ],
-  controllers: [AppController, AuthController, AdminController, FilesController, PlayerController, ServerPropertiesController],
+  controllers: [
+    AppController,
+    AuthController,
+    AdminController,
+    FilesController,
+    PlayerController,
+    ServerPropertiesController,
+  ],
   providers: [
     AppService,
     DockerService,

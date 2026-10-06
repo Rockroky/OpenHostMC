@@ -50,7 +50,9 @@ export class VersionService {
 
   private async fetchMojangVersions() {
     try {
-      const res = await axios.get('https://launchermeta.mojang.com/mc/game/version_manifest.json');
+      const res = await axios.get(
+        'https://launchermeta.mojang.com/mc/game/version_manifest.json',
+      );
       return res.data.versions
         .filter((v: any) => v.type === 'release')
         .slice(0, 20)

@@ -1,16 +1,16 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
+import {
+  Controller,
+  Get,
+  Post,
   Patch,
-  Delete, 
-  Param, 
-  Body, 
-  UseGuards, 
-  Request, 
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  Request,
   BadRequestException,
   ForbiddenException,
-  NotFoundException
+  NotFoundException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PlayerService, WhitelistEntry } from './player.service';
@@ -32,7 +32,11 @@ export class PlayerController {
    * - Collaborator with role OPERATOR: 403 Forbidden
    * - Unauthorized users: 403 Forbidden
    */
-  private async checkPlayerAccess(serverId: string, userId: string, role: string): Promise<void> {
+  private async checkPlayerAccess(
+    serverId: string,
+    userId: string,
+    role: string,
+  ): Promise<void> {
     if (!serverId || !/^[a-zA-Z0-9_-]+$/.test(serverId)) {
       throw new BadRequestException('ID server non valido');
     }
@@ -55,20 +59,32 @@ export class PlayerController {
     });
 
     if (!collaborator) {
-      throw new ForbiddenException('Accesso negato: non sei autorizzato per questo server');
+      throw new ForbiddenException(
+        'Accesso negato: non sei autorizzato per questo server',
+      );
     }
 
     if (collaborator.role !== CollaboratorRole.MANAGER) {
-      throw new ForbiddenException('Accesso negato: il ruolo OPERATOR non ha i permessi per gestire i giocatori o la configurazione');
+      throw new ForbiddenException(
+        'Accesso negato: il ruolo OPERATOR non ha i permessi per gestire i giocatori o la configurazione',
+      );
     }
 
-    if (collaborator.user?.plan && !collaborator.user.plan.can_edit_shared_servers) {
-      throw new ForbiddenException('Accesso negato: il tuo piano di abbonamento non consente la gestione di server condivisi');
+    if (
+      collaborator.user?.plan &&
+      !collaborator.user.plan.can_edit_shared_servers
+    ) {
+      throw new ForbiddenException(
+        'Accesso negato: il tuo piano di abbonamento non consente la gestione di server condivisi',
+      );
     }
   }
 
   @Get(':serverId/whitelist')
-  async getWhitelist(@Param('serverId') serverId: string, @Request() req): Promise<WhitelistEntry[]> {
+  async getWhitelist(
+    @Param('serverId') serverId: string,
+    @Request() req,
+  ): Promise<WhitelistEntry[]> {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
     return this.playerService.getWhitelist(serverId);
   }
@@ -77,32 +93,46 @@ export class PlayerController {
   async toggleWhitelist(
     @Param('serverId') serverId: string,
     @Body() body: { enabled: boolean },
-    @Request() req
+    @Request() req,
   ) {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
-    if (typeof body.enabled !== 'boolean') throw new BadRequestException('Stato enabled mancante');
-    return this.playerService.toggleWhitelist(serverId, body.enabled, req.user.userId);
+    if (typeof body.enabled !== 'boolean')
+      throw new BadRequestException('Stato enabled mancante');
+    return this.playerService.toggleWhitelist(
+      serverId,
+      body.enabled,
+      req.user.userId,
+    );
   }
 
   @Post(':serverId/whitelist')
   async addToWhitelist(
-    @Param('serverId') serverId: string, 
+    @Param('serverId') serverId: string,
     @Body() body: { playerName: string },
-    @Request() req
+    @Request() req,
   ) {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
-    if (!body.playerName) throw new BadRequestException('Nome player obbligatorio');
-    return this.playerService.addToWhitelist(serverId, body.playerName, req.user.userId);
+    if (!body.playerName)
+      throw new BadRequestException('Nome player obbligatorio');
+    return this.playerService.addToWhitelist(
+      serverId,
+      body.playerName,
+      req.user.userId,
+    );
   }
 
   @Delete(':serverId/whitelist/:playerName')
   async removeFromWhitelist(
     @Param('serverId') serverId: string,
     @Param('playerName') playerName: string,
-    @Request() req
+    @Request() req,
   ) {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
-    return this.playerService.removeFromWhitelist(serverId, playerName, req.user.userId);
+    return this.playerService.removeFromWhitelist(
+      serverId,
+      playerName,
+      req.user.userId,
+    );
   }
 
   // Operator / Permissions management
@@ -110,22 +140,32 @@ export class PlayerController {
   async opPlayer(
     @Param('serverId') serverId: string,
     @Body() body: { playerName: string },
-    @Request() req
+    @Request() req,
   ) {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
-    if (!body.playerName) throw new BadRequestException('Nome player obbligatorio');
-    return this.playerService.opPlayer(serverId, body.playerName, req.user.userId);
+    if (!body.playerName)
+      throw new BadRequestException('Nome player obbligatorio');
+    return this.playerService.opPlayer(
+      serverId,
+      body.playerName,
+      req.user.userId,
+    );
   }
 
   @Post(':serverId/deop')
   async deopPlayer(
     @Param('serverId') serverId: string,
     @Body() body: { playerName: string },
-    @Request() req
+    @Request() req,
   ) {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
-    if (!body.playerName) throw new BadRequestException('Nome player obbligatorio');
-    return this.playerService.deopPlayer(serverId, body.playerName, req.user.userId);
+    if (!body.playerName)
+      throw new BadRequestException('Nome player obbligatorio');
+    return this.playerService.deopPlayer(
+      serverId,
+      body.playerName,
+      req.user.userId,
+    );
   }
 
   // Kick management
@@ -133,11 +173,17 @@ export class PlayerController {
   async kickPlayer(
     @Param('serverId') serverId: string,
     @Body() body: { playerName: string; reason?: string },
-    @Request() req
+    @Request() req,
   ) {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
-    if (!body.playerName) throw new BadRequestException('Nome player obbligatorio');
-    return this.playerService.kickPlayer(serverId, body.playerName, body.reason, req.user.userId);
+    if (!body.playerName)
+      throw new BadRequestException('Nome player obbligatorio');
+    return this.playerService.kickPlayer(
+      serverId,
+      body.playerName,
+      body.reason,
+      req.user.userId,
+    );
   }
 
   // Usercache endpoints
@@ -159,8 +205,8 @@ export class PlayerController {
   @Post(':serverId/bans/player')
   async banPlayer(
     @Param('serverId') serverId: string,
-    @Body() body: { username: string, reason?: string, expires?: string },
-    @Request() req
+    @Body() body: { username: string; reason?: string; expires?: string },
+    @Request() req,
   ) {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
     if (!body.username) throw new BadRequestException('username is required');
@@ -169,7 +215,7 @@ export class PlayerController {
       body.username,
       body.reason || 'Banned by administrator',
       body.expires || 'Never',
-      req.user.userId
+      req.user.userId,
     );
   }
 
@@ -177,7 +223,7 @@ export class PlayerController {
   async pardonPlayer(
     @Param('serverId') serverId: string,
     @Param('username') username: string,
-    @Request() req
+    @Request() req,
   ) {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
     return this.playerService.pardonPlayer(serverId, username, req.user.userId);
@@ -186,8 +232,8 @@ export class PlayerController {
   @Post(':serverId/bans/ip')
   async banIp(
     @Param('serverId') serverId: string,
-    @Body() body: { ip: string, reason?: string, expires?: string },
-    @Request() req
+    @Body() body: { ip: string; reason?: string; expires?: string },
+    @Request() req,
   ) {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
     if (!body.ip) throw new BadRequestException('ip is required');
@@ -196,7 +242,7 @@ export class PlayerController {
       body.ip,
       body.reason || 'Banned by administrator',
       body.expires || 'Never',
-      req.user.userId
+      req.user.userId,
     );
   }
 
@@ -204,10 +250,9 @@ export class PlayerController {
   async pardonIp(
     @Param('serverId') serverId: string,
     @Param('ip') ip: string,
-    @Request() req
+    @Request() req,
   ) {
     await this.checkPlayerAccess(serverId, req.user.userId, req.user.role);
     return this.playerService.pardonIp(serverId, ip, req.user.userId);
   }
 }
-

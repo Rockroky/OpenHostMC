@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: '*',
       allow: '/',
-      disallow: ['/admin/', '/api/', '/console/', '/server-management/'],
+      disallow: ['/admin/', '/api/', '/console/', '/server-management/', '/dashboard/', '/server/new/'],
     },
     sitemap: 'https://openhostmc.com/sitemap.xml',
   };

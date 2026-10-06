@@ -1,17 +1,17 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Param, 
-  UseInterceptors, 
-  UploadedFiles, 
-  Res, 
-  UseGuards, 
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  UseInterceptors,
+  UploadedFiles,
+  Res,
+  UseGuards,
   BadRequestException,
   ForbiddenException,
   NotFoundException,
   Request,
-  Query
+  Query,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
@@ -36,7 +36,11 @@ export class FilesController {
    * - Collaborator with role OPERATOR: 403 Forbidden
    * - Unauthorized users: 403 Forbidden
    */
-  private async checkFileAccess(serverId: string, userId: string, role: string): Promise<void> {
+  private async checkFileAccess(
+    serverId: string,
+    userId: string,
+    role: string,
+  ): Promise<void> {
     if (!serverId || !/^[a-zA-Z0-9_-]+$/.test(serverId)) {
       throw new BadRequestException('ID server non valido');
     }
@@ -59,15 +63,24 @@ export class FilesController {
     });
 
     if (!collaborator) {
-      throw new ForbiddenException('Accesso negato: non sei autorizzato per questo server');
+      throw new ForbiddenException(
+        'Accesso negato: non sei autorizzato per questo server',
+      );
     }
 
     if (collaborator.role !== CollaboratorRole.MANAGER) {
-      throw new ForbiddenException('Accesso negato: il ruolo OPERATOR non può gestire i file del server');
+      throw new ForbiddenException(
+        'Accesso negato: il ruolo OPERATOR non può gestire i file del server',
+      );
     }
 
-    if (collaborator.user?.plan && !collaborator.user.plan.can_edit_shared_servers) {
-      throw new ForbiddenException('Accesso negato: il tuo piano di abbonamento non consente la gestione di server condivisi');
+    if (
+      collaborator.user?.plan &&
+      !collaborator.user.plan.can_edit_shared_servers
+    ) {
+      throw new ForbiddenException(
+        'Accesso negato: il tuo piano di abbonamento non consente la gestione di server condivisi',
+      );
     }
   }
 
@@ -77,7 +90,7 @@ export class FilesController {
   async uploadBulk(
     @Param('serverId') serverId: string,
     @UploadedFiles() files: Express.Multer.File[],
-    @Request() req
+    @Request() req,
   ) {
     const { userId, role } = req.user;
     await this.checkFileAccess(serverId, userId, role);
@@ -95,7 +108,9 @@ export class FilesController {
         originalName.includes('\\') ||
         originalName.includes('\0')
       ) {
-        throw new BadRequestException(`Caratteri di percorso malevoli rilevati nel nome file: ${originalName}`);
+        throw new BadRequestException(
+          `Caratteri di percorso malevoli rilevati nel nome file: ${originalName}`,
+        );
       }
     }
 
@@ -107,7 +122,7 @@ export class FilesController {
   async exportMods(
     @Param('serverId') serverId: string,
     @Res() res: Response,
-    @Request() req
+    @Request() req,
   ) {
     const { userId, role } = req.user;
     await this.checkFileAccess(serverId, userId, role);
@@ -120,7 +135,7 @@ export class FilesController {
   async exportWorld(
     @Param('serverId') serverId: string,
     @Res() res: Response,
-    @Request() req
+    @Request() req,
   ) {
     const { userId, role } = req.user;
     await this.checkFileAccess(serverId, userId, role);
@@ -133,7 +148,7 @@ export class FilesController {
   async listFiles(
     @Param('serverId') serverId: string,
     @Query('path') queryPath?: string,
-    @Request() req?: any
+    @Request() req?: any,
   ) {
     const { userId, role } = req.user;
     await this.checkFileAccess(serverId, userId, role);
@@ -144,10 +159,11 @@ export class FilesController {
       safeRelativePath.includes('\0') ||
       safeRelativePath.includes(':')
     ) {
-      throw new BadRequestException('Path non valido: Directory Traversal rilevato');
+      throw new BadRequestException(
+        'Path non valido: Directory Traversal rilevato',
+      );
     }
 
     return this.filesService.listFiles(serverId, safeRelativePath);
   }
 }
-

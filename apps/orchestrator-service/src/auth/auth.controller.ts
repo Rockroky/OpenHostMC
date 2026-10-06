@@ -1,4 +1,11 @@
-import { Controller, Post, Get, Body, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { RolesGuard, Roles } from './roles.guard';
@@ -25,7 +32,11 @@ export class AuthController {
     @Request() req,
     @Body() body: { oldPassword: string; newPassword: string },
   ) {
-    return this.authService.changePassword(req.user.userId, body.oldPassword, body.newPassword);
+    return this.authService.changePassword(
+      req.user.userId,
+      body.oldPassword,
+      body.newPassword,
+    );
   }
 
   @Get('me')
@@ -38,7 +49,9 @@ export class AuthController {
   @Post('admin-setup')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('ADMIN')
-  async setupAdminUser(@Body() body: { email: string; username: string; password: string }) {
+  async setupAdminUser(
+    @Body() body: { email: string; username: string; password: string },
+  ) {
     return this.authService.register(body.email, body.username, body.password);
   }
 
@@ -46,11 +59,21 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   async completeAdminSetup(
     @Request() req,
-    @Body() body: { newPassword: string; securityQuestion: string; securityAnswer: string },
+    @Body()
+    body: {
+      newPassword: string;
+      securityQuestion: string;
+      securityAnswer: string;
+    },
   ) {
     if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPERADMIN') {
       throw new Error('Solo gli admin possono completare questo setup');
     }
-    return this.authService.completeAdminSetup(req.user.userId, body.newPassword, body.securityQuestion, body.securityAnswer);
+    return this.authService.completeAdminSetup(
+      req.user.userId,
+      body.newPassword,
+      body.securityQuestion,
+      body.securityAnswer,
+    );
   }
 }

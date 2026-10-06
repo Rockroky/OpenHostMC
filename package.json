@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "start": "npx prisma db push --schema=packages/database/prisma/schema.prisma --accept-data-loss && npx concurrently \"cross-env PORT=3002 npm run start:prod --workspace=apps/orchestrator-service\" \"cross-env PORT=3000 HOSTNAME=0.0.0.0 npm run start --workspace=apps/frontend\"",
+    "start": "node scripts/wait-for-db.js && (prisma db push --schema=packages/database/prisma/schema.prisma --accept-data-loss || true) && concurrently \"cross-env PORT=3002 npm run start:prod --workspace=apps/orchestrator-service\" \"cross-env PORT=3000 HOSTNAME=0.0.0.0 npm run start --workspace=apps/frontend\"",
+    "start:services": "concurrently \"cross-env PORT=3002 npm run start:prod --workspace=apps/orchestrator-service\" \"cross-env PORT=3000 HOSTNAME=0.0.0.0 npm run start --workspace=apps/frontend\"",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
@@ -13,9 +14,16 @@
     "db:seed": "node -r ts-node/register packages/database/prisma/seed.ts",
     "test:server-management": "node test-server-management.js"
   },
+  "dependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "turbo": "^2.9.16"
+  },
   "devDependencies": {
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^5.22.0",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
     "pg": "^8.21.0",
     "prettier": "^3.7.4",
     "prisma": "^5.22.0",

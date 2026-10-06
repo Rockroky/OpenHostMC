@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma.service';
@@ -65,17 +69,21 @@ export class AuthService implements OnModuleInit {
         backup_max_stored: 14,
         backup_frequency_hours: 2,
         queue_enabled: false,
-      }
+      },
     ];
 
     for (const planData of defaultPlans) {
-      let plan = await this.prisma.plan.findFirst({ where: { name: planData.name } });
+      const plan = await this.prisma.plan.findFirst({
+        where: { name: planData.name },
+      });
       if (!plan) {
         await this.prisma.plan.create({ data: planData });
       }
     }
 
-    let superAdminPlan = await this.prisma.plan.findFirst({ where: { name: 'SuperAdmin' } });
+    let superAdminPlan = await this.prisma.plan.findFirst({
+      where: { name: 'SuperAdmin' },
+    });
     if (!superAdminPlan) {
       superAdminPlan = await this.prisma.plan.create({
         data: {
@@ -97,7 +105,7 @@ export class AuthService implements OnModuleInit {
     // Force SuperAdmin to have the SuperAdmin plan if env variables are present
     const superAdminEmail = process.env.SUPERADMIN_EMAIL;
     const superAdminPassword = process.env.SUPERADMIN_PASSWORD;
-    
+
     if (superAdminEmail && superAdminPassword) {
       await this.prisma.user.upsert({
         where: { email: superAdminEmail },
@@ -123,7 +131,12 @@ export class AuthService implements OnModuleInit {
     const superAdminEmail = process.env.SUPERADMIN_EMAIL;
     const superAdminPassword = process.env.SUPERADMIN_PASSWORD;
 
-    if (superAdminEmail && superAdminPassword && email === superAdminEmail && password === superAdminPassword) {
+    if (
+      superAdminEmail &&
+      superAdminPassword &&
+      email === superAdminEmail &&
+      password === superAdminPassword
+    ) {
       const superAdmin = await this.prisma.user.findUnique({
         where: { email: superAdminEmail },
         include: { plan: true },
@@ -132,9 +145,13 @@ export class AuthService implements OnModuleInit {
       if (!superAdmin) {
         throw new UnauthorizedException('SuperAdmin non ancora inizializzato.');
       }
-      
+
       const { password_hash: _, ...result } = superAdmin;
-      return { ...result, requiresPasswordChange: false, planId: superAdmin.plan_id };
+      return {
+        ...result,
+        requiresPasswordChange: false,
+        planId: superAdmin.plan_id,
+      };
     }
 
     const user = await this.prisma.user.findUnique({
@@ -152,7 +169,9 @@ export class AuthService implements OnModuleInit {
     }
 
     // Check if password change is required (first login)
-    const requiresPasswordChange = user.password_hash === '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.VTtYA.qGZvKG6';
+    const requiresPasswordChange =
+      user.password_hash ===
+      '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.VTtYA.qGZvKG6';
 
     const { password_hash: _, ...result } = user;
     return { ...result, requiresPasswordChange, planId: user.plan_id };
@@ -169,7 +188,9 @@ export class AuthService implements OnModuleInit {
 
     return {
       access_token: this.jwtService.sign(payload),
-      requiresSetup: (user.role === 'ADMIN' || user.role === 'SUPERADMIN') && !user.setup_completed,
+      requiresSetup:
+        (user.role === 'ADMIN' || user.role === 'SUPERADMIN') &&
+        !user.setup_completed,
       user: {
         id: user.id,
         email: user.email,
@@ -238,7 +259,11 @@ export class AuthService implements OnModuleInit {
     return this.login({ ...result, planId: result.plan_id });
   }
 
-  async changePassword(userId: string, oldPassword: string, newPassword: string) {
+  async changePassword(
+    userId: string,
+    oldPassword: string,
+    newPassword: string,
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -247,7 +272,10 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('User not found');
     }
 
-    const isPasswordValid = await bcrypt.compare(oldPassword, user.password_hash);
+    const isPasswordValid = await bcrypt.compare(
+      oldPassword,
+      user.password_hash,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid old password');
     }
@@ -262,14 +290,22 @@ export class AuthService implements OnModuleInit {
     return { success: true, message: 'Password changed successfully' };
   }
 
-  async completeAdminSetup(userId: string, newPassword: string, securityQuestion: string, securityAnswer: string) {
+  async completeAdminSetup(
+    userId: string,
+    newPassword: string,
+    securityQuestion: string,
+    securityAnswer: string,
+  ) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException('User not found');
     if (user.setup_completed) throw new Error('Setup already completed');
 
     const hashedNewPassword = await bcrypt.hash(newPassword, 12);
-    const hashedAnswer = await bcrypt.hash(securityAnswer.toLowerCase().trim(), 12);
-    
+    const hashedAnswer = await bcrypt.hash(
+      securityAnswer.toLowerCase().trim(),
+      12,
+    );
+
     // Generate recovery key
     const crypto = require('crypto');
     const recoveryKey = crypto.randomBytes(16).toString('hex').toUpperCase();

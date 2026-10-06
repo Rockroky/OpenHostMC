@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Lock,
 } from 'lucide-react';
+import { ModalOverlay } from './ui/animations';
 
 interface Collaborator {
   id: string;
@@ -79,8 +80,6 @@ export default function ShareModal({
       setActionError(null);
     }
   }, [isOpen, serverId]);
-
-  if (!isOpen) return null;
 
   const handleGenerateLink = async () => {
     setIsGenerating(true);
@@ -146,7 +145,7 @@ export default function ShareModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+    <ModalOverlay isOpen={isOpen} onClose={onClose}>
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="p-5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/80">
@@ -351,6 +350,6 @@ export default function ShareModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

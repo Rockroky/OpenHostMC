@@ -19,7 +19,9 @@ import { UserRole, CollaboratorRole } from '@prisma/client';
   cors: { origin: '*' },
   namespace: 'console',
 })
-export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ConsoleGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -33,8 +35,14 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
     this.docker = new Docker();
   }
 
-  broadcastServerStatus(serverId: string, status: string, port?: number | null) {
-    this.logger.log(`Broadcasting server-status-changed for ${serverId}: status=${status}, port=${port}`);
+  broadcastServerStatus(
+    serverId: string,
+    status: string,
+    port?: number | null,
+  ) {
+    this.logger.log(
+      `Broadcasting server-status-changed for ${serverId}: status=${status}, port=${port}`,
+    );
     if (this.server) {
       this.server.to(`server_${serverId}`).emit('server-status-changed', {
         serverId,
@@ -67,11 +75,17 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
     }
   }
 
-  private authenticate(client: Socket, token?: string): { userId: string; role: string } | null {
+  private authenticate(
+    client: Socket,
+    token?: string,
+  ): { userId: string; role: string } | null {
     const jwtToken = token || (client.handshake.auth?.token as string);
     if (!jwtToken) return null;
     try {
-      const decoded: any = jwt.verify(jwtToken, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+      const decoded: any = jwt.verify(
+        jwtToken,
+        process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+      );
       return { userId: decoded.sub, role: decoded.role };
     } catch {
       return null;
@@ -85,16 +99,26 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
   ) {
     const user = this.authenticate(client, payload.token);
     if (!user) {
-      return client.emit('server-error', 'Unauthorized: invalid or missing token');
+      return client.emit(
+        'server-error',
+        'Unauthorized: invalid or missing token',
+      );
     }
 
-    const server = await this.prisma.mcServer.findUnique({ where: { id: payload.serverId } });
+    const server = await this.prisma.mcServer.findUnique({
+      where: { id: payload.serverId },
+    });
     if (!server) {
       return client.emit('server-error', 'Server non trovato');
     }
     if (server.owner_id !== user.userId && user.role !== 'SUPERADMIN') {
       const isCollaborator = await this.prisma.serverCollaborator.findUnique({
-        where: { user_id_server_id: { user_id: user.userId, server_id: payload.serverId } },
+        where: {
+          user_id_server_id: {
+            user_id: user.userId,
+            server_id: payload.serverId,
+          },
+        },
       });
       if (!isCollaborator) {
         return client.emit('server-error', 'Non autorizzato');
@@ -102,7 +126,9 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
     }
 
     client.join(`server_${payload.serverId}`);
-    this.logger.log(`Client ${client.id} joined room server_${payload.serverId}`);
+    this.logger.log(
+      `Client ${client.id} joined room server_${payload.serverId}`,
+    );
     client.emit('joined-server', { serverId: payload.serverId });
   }
 
@@ -113,16 +139,26 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
   ) {
     const user = this.authenticate(client, payload.token);
     if (!user) {
-      return client.emit('console-error', 'Unauthorized: invalid or missing token');
+      return client.emit(
+        'console-error',
+        'Unauthorized: invalid or missing token',
+      );
     }
 
-    const server = await this.prisma.mcServer.findUnique({ where: { id: payload.serverId } });
+    const server = await this.prisma.mcServer.findUnique({
+      where: { id: payload.serverId },
+    });
     if (!server) {
       return client.emit('console-error', 'Server non trovato');
     }
     if (server.owner_id !== user.userId && user.role !== 'SUPERADMIN') {
       const isCollaborator = await this.prisma.serverCollaborator.findUnique({
-        where: { user_id_server_id: { user_id: user.userId, server_id: payload.serverId } },
+        where: {
+          user_id_server_id: {
+            user_id: user.userId,
+            server_id: payload.serverId,
+          },
+        },
       });
       if (!isCollaborator) {
         return client.emit('console-error', 'Non autorizzato');
@@ -135,13 +171,21 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
     client.data.serverId = payload.serverId;
 
     try {
-      const logStream = await container.logs({ follow: true, stdout: true, stderr: true, tail: 100 });
+      const logStream = await container.logs({
+        follow: true,
+        stdout: true,
+        stderr: true,
+        tail: 100,
+      });
       logStream.on('data', (chunk: Buffer) => {
-        const str = chunk.length > 8 ? chunk.toString('utf8', 8) : chunk.toString('utf8');
+        const str =
+          chunk.length > 8 ? chunk.toString('utf8', 8) : chunk.toString('utf8');
         client.emit('console-log', str);
       });
       logStream.on('error', (err: Error) => {
-        this.logger.error(`Log stream error for ${payload.serverId}: ${err.message}`);
+        this.logger.error(
+          `Log stream error for ${payload.serverId}: ${err.message}`,
+        );
         client.emit('console-error', 'Log stream error');
       });
       client.data.logStream = logStream;
@@ -150,24 +194,42 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
       statsStream.on('data', (chunk: Buffer) => {
         try {
           const stats = JSON.parse(chunk.toString());
-          const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
-          const systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
-          const cpuPercent = systemDelta > 0 ? (cpuDelta / systemDelta) * stats.cpu_stats.online_cpus * 100 : 0;
+          const cpuDelta =
+            stats.cpu_stats.cpu_usage.total_usage -
+            stats.precpu_stats.cpu_usage.total_usage;
+          const systemDelta =
+            stats.cpu_stats.system_cpu_usage -
+            stats.precpu_stats.system_cpu_usage;
+          const cpuPercent =
+            systemDelta > 0
+              ? (cpuDelta / systemDelta) * stats.cpu_stats.online_cpus * 100
+              : 0;
           const ramMB = stats.memory_stats.usage / (1024 * 1024);
-          client.emit('stats', { cpu: Math.round(cpuPercent), ram: Math.round(ramMB) });
+          client.emit('stats', {
+            cpu: Math.round(cpuPercent),
+            ram: Math.round(ramMB),
+          });
         } catch (e) {
-          this.logger.error(`Stats parse error for ${payload.serverId}: ${e.message}`);
+          this.logger.error(
+            `Stats parse error for ${payload.serverId}: ${e.message}`,
+          );
         }
       });
       statsStream.on('error', (err: Error) => {
-        this.logger.error(`Stats stream error for ${payload.serverId}: ${err.message}`);
+        this.logger.error(
+          `Stats stream error for ${payload.serverId}: ${err.message}`,
+        );
       });
       client.data.statsStream = statsStream;
 
       client.join(`server_${payload.serverId}`);
-      this.logger.log(`Client ${client.id} joined console for server ${payload.serverId}`);
+      this.logger.log(
+        `Client ${client.id} joined console for server ${payload.serverId}`,
+      );
     } catch (err) {
-      this.logger.error(`Failed to start streams for ${payload.serverId}: ${err.message}`);
+      this.logger.error(
+        `Failed to start streams for ${payload.serverId}: ${err.message}`,
+      );
       client.emit('console-error', 'Container non trovato o non avviato');
     }
   }
@@ -177,48 +239,84 @@ export class ConsoleGateway implements OnGatewayConnection, OnGatewayDisconnect 
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { serverId: string; command: string; token?: string },
   ) {
-    if (!data || !data.serverId || !data.command || typeof data.command !== 'string') {
-      return client.emit('console-error', 'Bad Request: serverId e comando sono richiesti');
+    if (
+      !data ||
+      !data.serverId ||
+      !data.command ||
+      typeof data.command !== 'string'
+    ) {
+      return client.emit(
+        'console-error',
+        'Bad Request: serverId e comando sono richiesti',
+      );
     }
 
     const trimmedCommand = data.command.trim();
     if (!trimmedCommand || trimmedCommand.length > 500) {
-      return client.emit('console-error', 'Bad Request: il comando deve essere compreso tra 1 e 500 caratteri');
+      return client.emit(
+        'console-error',
+        'Bad Request: il comando deve essere compreso tra 1 e 500 caratteri',
+      );
     }
 
     const user = this.authenticate(client, data.token);
     if (!user) {
-      return client.emit('console-error', 'Unauthorized: autenticazione fallita');
+      return client.emit(
+        'console-error',
+        'Unauthorized: autenticazione fallita',
+      );
     }
 
-    const server = await this.prisma.mcServer.findUnique({ where: { id: data.serverId } });
+    const server = await this.prisma.mcServer.findUnique({
+      where: { id: data.serverId },
+    });
     if (!server) {
       return client.emit('console-error', 'Server non trovato');
     }
 
     if (server.owner_id !== user.userId && user.role !== 'SUPERADMIN') {
       const collaborator = await this.prisma.serverCollaborator.findUnique({
-        where: { user_id_server_id: { user_id: user.userId, server_id: data.serverId } },
+        where: {
+          user_id_server_id: { user_id: user.userId, server_id: data.serverId },
+        },
         include: { user: { include: { plan: true } } },
       });
 
       if (!collaborator) {
-        return client.emit('console-error', 'Forbidden: non sei un collaboratore autorizzato per questo server');
+        return client.emit(
+          'console-error',
+          'Forbidden: non sei un collaboratore autorizzato per questo server',
+        );
       }
 
       if (collaborator.role !== CollaboratorRole.MANAGER) {
-        return client.emit('console-error', 'Forbidden: il ruolo OPERATOR non ha i permessi per inviare comandi dalla console');
+        return client.emit(
+          'console-error',
+          'Forbidden: il ruolo OPERATOR non ha i permessi per inviare comandi dalla console',
+        );
       }
 
-      if (collaborator.user?.plan && !collaborator.user.plan.can_edit_shared_servers) {
-        return client.emit('console-error', 'Forbidden: il tuo piano di abbonamento non consente l\'invio di comandi su server condivisi');
+      if (
+        collaborator.user?.plan &&
+        !collaborator.user.plan.can_edit_shared_servers
+      ) {
+        return client.emit(
+          'console-error',
+          "Forbidden: il tuo piano di abbonamento non consente l'invio di comandi su server condivisi",
+        );
       }
     }
 
     try {
-      await this.dockerService.executeRconCommand(data.serverId, trimmedCommand);
+      await this.dockerService.executeRconCommand(
+        data.serverId,
+        trimmedCommand,
+      );
     } catch (error) {
-      client.emit('console-error', `Failed to execute command: ${error.message}`);
+      client.emit(
+        'console-error',
+        `Failed to execute command: ${error.message}`,
+      );
     }
   }
 }

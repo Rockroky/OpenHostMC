@@ -19,11 +19,11 @@ export class DockerService {
     'online-mode': 'ONLINE_MODE',
     'white-list': 'ENABLE_WHITELIST',
     'max-players': 'MAX_PLAYERS',
-    'difficulty': 'DIFFICULTY',
-    'motd': 'MOTD',
-    'gamemode': 'GAMEMODE',
-    'pvp': 'PVP',
-    'hardcore': 'HARDCORE',
+    difficulty: 'DIFFICULTY',
+    motd: 'MOTD',
+    gamemode: 'GAMEMODE',
+    pvp: 'PVP',
+    hardcore: 'HARDCORE',
     'allow-flight': 'ALLOW_FLIGHT',
     'allow-nether': 'ALLOW_NETHER',
     'spawn-monsters': 'SPAWN_MONSTERS',
@@ -56,7 +56,7 @@ export class DockerService {
     'broadcast-rcon-to-ops': 'BROADCAST_RCON_TO_OPS',
     'sync-chunk-writes': 'SYNC_CHUNK_WRITES',
     'generate-structures': 'GENERATE_STRUCTURES',
-    'pause-when-empty-seconds': 'PAUSE_WHEN_EMPTY_SECONDS'
+    'pause-when-empty-seconds': 'PAUSE_WHEN_EMPTY_SECONDS',
   };
 
   constructor() {
@@ -64,11 +64,22 @@ export class DockerService {
   }
 
   async startMinecraftServer(
-    serverId: string, 
-    port: number, 
+    serverId: string,
+    port: number,
     properties: Record<string, string> = {},
-    options: { ramMb: number; cpuCores: number; mcType: string; mcVersion: string }
-  ): Promise<{ status: string; containerName: string; port: number; rconPassword?: string; rconPort?: number }> {
+    options: {
+      ramMb: number;
+      cpuCores: number;
+      mcType: string;
+      mcVersion: string;
+    },
+  ): Promise<{
+    status: string;
+    containerName: string;
+    port: number;
+    rconPassword?: string;
+    rconPort?: number;
+  }> {
     const containerName = this.getContainerName(serverId);
 
     // Configurazione path sull'host per il Bind Mount (Fase 2)
@@ -76,16 +87,18 @@ export class DockerService {
       process.cwd(),
       'data',
       'servers',
-      serverId
+      serverId,
     );
-    
-    const hostDataPath = process.env.HOST_DATA_PATH 
-      ? path.join(process.env.HOST_DATA_PATH, serverId) 
+
+    const hostDataPath = process.env.HOST_DATA_PATH
+      ? path.join(process.env.HOST_DATA_PATH, serverId)
       : internalDataPath;
 
     try {
-      this.logger.log(`Tento di avviare il server ${serverId} sulla porta ${port} con ${options.ramMb}MB RAM e ${options.cpuCores} Cores`);
-      
+      this.logger.log(
+        `Tento di avviare il server ${serverId} sulla porta ${port} con ${options.ramMb}MB RAM e ${options.cpuCores} Cores`,
+      );
+
       // Assicurati che la cartella esista localmente nel container di OpenHostMC
       if (!fs.existsSync(internalDataPath)) {
         await fs.promises.mkdir(internalDataPath, { recursive: true });
@@ -95,7 +108,9 @@ export class DockerService {
       // 1. Pull dell'immagine
       const stream = await this.docker.pull('itzg/minecraft-server:latest');
       await new Promise<void>((resolve, reject) => {
-        this.docker.modem.followProgress(stream, (err: any) => (err ? reject(err) : resolve()));
+        this.docker.modem.followProgress(stream, (err: any) =>
+          err ? reject(err) : resolve(),
+        );
       });
 
       // Generate RCON password for this session
@@ -114,10 +129,16 @@ export class DockerService {
         `RCON_PORT=${rconPort}`,
       ];
 
-      this.logger.log(`ENABLE_RCON=TRUE, ENABLE_WHITELIST=FALSE for container ${containerName}`);
+      this.logger.log(
+        `ENABLE_RCON=TRUE, ENABLE_WHITELIST=FALSE for container ${containerName}`,
+      );
 
       for (const [propKey, envKey] of Object.entries(this.ENV_MAPPING)) {
-        if (properties[propKey] !== undefined && properties[propKey] !== null && properties[propKey] !== '') {
+        if (
+          properties[propKey] !== undefined &&
+          properties[propKey] !== null &&
+          properties[propKey] !== ''
+        ) {
           envVars.push(`${envKey}=${properties[propKey]}`);
         }
       }
@@ -126,7 +147,9 @@ export class DockerService {
       try {
         const existingContainer = this.docker.getContainer(containerName);
         const inspect = await existingContainer.inspect();
-        this.logger.log(`Trovato container esistente ${containerName} (Status: ${inspect.State.Status}). Rimozione in corso...`);
+        this.logger.log(
+          `Trovato container esistente ${containerName} (Status: ${inspect.State.Status}). Rimozione in corso...`,
+        );
         if (inspect.State.Running) {
           await existingContainer.stop();
         }
@@ -134,7 +157,9 @@ export class DockerService {
         this.logger.log(`✅ Container esistente rimosso.`);
       } catch (e: any) {
         if (e.statusCode !== 404) {
-          this.logger.warn(`Errore durante la rimozione del container esistente: ${e.message}`);
+          this.logger.warn(
+            `Errore durante la rimozione del container esistente: ${e.message}`,
+          );
         }
         // Se 404, il container non esiste, procediamo normalmente
       }
@@ -157,12 +182,15 @@ export class DockerService {
 
       // 4. Avvia il container
       await container.start();
-      this.logger.log(`✅ Container ${containerName} avviato con successo con Bind Mount in ${hostDataPath}`);
-      
-      return { status: 'STARTED', containerName, port, rconPassword, rconPort };
+      this.logger.log(
+        `✅ Container ${containerName} avviato con successo con Bind Mount in ${hostDataPath}`,
+      );
 
+      return { status: 'STARTED', containerName, port, rconPassword, rconPort };
     } catch (error: any) {
-      this.logger.error(`Errore durante l'avvio del container: ${error.message}`);
+      this.logger.error(
+        `Errore durante l'avvio del container: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -210,7 +238,10 @@ export class DockerService {
 
   // --- Fase 1 & 2: Metodi per il salvataggio delle proprietà ---
 
-  async updateServerProperties(serverId: string, properties: Record<string, string>) {
+  async updateServerProperties(
+    serverId: string,
+    properties: Record<string, string>,
+  ) {
     const containerName = this.getContainerName(serverId);
     const fileContent = this.formatProperties(properties);
 
@@ -230,33 +261,43 @@ export class DockerService {
 
       if (isRunning) {
         try {
-          this.logger.log(`Tentativo di scrittura live via exec per ${containerName}`);
+          this.logger.log(
+            `Tentativo di scrittura live via exec per ${containerName}`,
+          );
           await this.writePropertiesViaExec(containerName, fileContent);
         } catch (execError: any) {
-          this.logger.warn(`Exec fallito, provo con fallback cp: ${execError.message}`);
+          this.logger.warn(
+            `Exec fallito, provo con fallback cp: ${execError.message}`,
+          );
           await this.writePropertiesViaCp(containerName, fileContent);
         }
 
         // Riavvia il container per applicare le modifiche (Minecraft le legge all'avvio)
-        this.logger.log(`Riavvio container ${containerName} per applicare le proprietà...`);
+        this.logger.log(
+          `Riavvio container ${containerName} per applicare le proprietà...`,
+        );
         await container.restart({ t: 5 });
         this.logger.log(`✅ Container ${containerName} riavviato.`);
       }
 
       return { success: true, writtenToContainer: isRunning };
     } catch (error: any) {
-      this.logger.error(`Errore durante l'aggiornamento proprietà: ${error.message}`);
+      this.logger.error(
+        `Errore durante l'aggiornamento proprietà: ${error.message}`,
+      );
       throw error;
     }
   }
 
-async executeRconCommand(serverId: string, command: string): Promise<void> {
+  async executeRconCommand(serverId: string, command: string): Promise<void> {
     const containerName = this.getContainerName(serverId);
     try {
       const container = this.docker.getContainer(containerName);
       const inspect = await container.inspect();
       if (!inspect.State.Running) {
-        this.logger.warn(`Container ${containerName} not running, skipping RCON command`);
+        this.logger.warn(
+          `Container ${containerName} not running, skipping RCON command`,
+        );
         return;
       }
       // Use the existing RCON client logic (assumed to be implemented elsewhere or here)
@@ -287,7 +328,7 @@ async executeRconCommand(serverId: string, command: string): Promise<void> {
       process.cwd(),
       'data',
       'servers',
-      serverId
+      serverId,
     );
     const filePath = path.join(internalDataPath, 'server.properties');
 
@@ -299,7 +340,10 @@ async executeRconCommand(serverId: string, command: string): Promise<void> {
     this.logger.log(`✅ server.properties scritto su disco: ${filePath}`);
   }
 
-  private async writePropertiesViaExec(containerName: string, fileContent: string) {
+  private async writePropertiesViaExec(
+    containerName: string,
+    fileContent: string,
+  ) {
     const container = this.docker.getContainer(containerName);
     const exec = await container.exec({
       Cmd: ['sh', '-c', 'cat > /data/server.properties'],
@@ -309,22 +353,27 @@ async executeRconCommand(serverId: string, command: string): Promise<void> {
     });
 
     const stream = await exec.start({ hijack: true, stdin: true });
-    
+
     return new Promise<void>((resolve, reject) => {
       stream.on('end', resolve);
       stream.on('error', reject);
-      
+
       // Scrive il contenuto e chiude lo stream
       stream.write(fileContent);
       stream.end();
     });
   }
 
-  private async writePropertiesViaCp(containerName: string, fileContent: string) {
-    // Nota: dockerode putArchive richiede un tar stream. 
+  private async writePropertiesViaCp(
+    containerName: string,
+    fileContent: string,
+  ) {
+    // Nota: dockerode putArchive richiede un tar stream.
     // Per semplicità in questo ambiente senza tar-fs, usiamo exec come metodo primario.
     // Se exec fallisce e il bind mount è attivo, il file è già su disco.
-    this.logger.log(`Fallback: il file dovrebbe essere già accessibile tramite bind mount per ${containerName}`);
+    this.logger.log(
+      `Fallback: il file dovrebbe essere già accessibile tramite bind mount per ${containerName}`,
+    );
   }
 
   private getSanitizedName(serverId: string): string {
@@ -335,15 +384,12 @@ async executeRconCommand(serverId: string, command: string): Promise<void> {
   }
 
   private formatProperties(properties: Record<string, string>): string {
-    const lines = [
-      '#Minecraft server properties',
-      `#${new Date().toString()}`
-    ];
-    
+    const lines = ['#Minecraft server properties', `#${new Date().toString()}`];
+
     for (const [key, value] of Object.entries(properties)) {
       lines.push(`${key}=${value}`);
     }
-    
+
     return lines.join('\n') + '\n';
   }
 
@@ -355,7 +401,7 @@ async executeRconCommand(serverId: string, command: string): Promise<void> {
 
   private async getRconConnection(serverId: string): Promise<any> {
     const containerName = this.getContainerName(serverId);
-    
+
     // Check if we have an existing connection
     if (this.rconConnections.has(serverId)) {
       const connection = this.rconConnections.get(serverId);
@@ -385,22 +431,26 @@ async executeRconCommand(serverId: string, command: string): Promise<void> {
         host: 'localhost', // In Docker, this would be the container IP
         port: server.rcon_port,
         password: server.rcon_password,
-        lastUsed: Date.now()
+        lastUsed: Date.now(),
       };
-      
+
       this.rconConnections.set(serverId, connection);
       this.connectionRetries.delete(serverId); // Reset retry counter
-      
+
       return connection;
     } catch (error) {
       // Implement retry logic with exponential backoff
       const retryCount = this.connectionRetries.get(serverId) || 0;
       if (retryCount < this.MAX_RETRIES) {
         this.connectionRetries.set(serverId, retryCount + 1);
-        await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY_MS * (retryCount + 1)));
+        await new Promise((resolve) =>
+          setTimeout(resolve, this.RETRY_DELAY_MS * (retryCount + 1)),
+        );
         return this.getRconConnection(serverId); // Retry
       } else {
-        throw new Error(`Failed to connect to RCON after ${this.MAX_RETRIES} attempts: ${error.message}`);
+        throw new Error(
+          `Failed to connect to RCON after ${this.MAX_RETRIES} attempts: ${error.message}`,
+        );
       }
     }
   }
@@ -411,28 +461,33 @@ async executeRconCommand(serverId: string, command: string): Promise<void> {
     return {
       id: serverId,
       rcon_password: 'testpassword',
-      rcon_port: 25575
+      rcon_port: 25575,
     };
   }
 
-  async executeRconCommandWithPooling(serverId: string, command: string): Promise<void> {
+  async executeRconCommandWithPooling(
+    serverId: string,
+    command: string,
+  ): Promise<void> {
     const containerName = this.getContainerName(serverId);
-    
+
     try {
       const container = this.docker.getContainer(containerName);
       const inspect = await container.inspect();
       if (!inspect.State.Running) {
-        this.logger.warn(`Container ${containerName} not running, skipping RCON command`);
+        this.logger.warn(
+          `Container ${containerName} not running, skipping RCON command`,
+        );
         return;
       }
 
       // Get connection from pool
       const connection = await this.getRconConnection(serverId);
-      
+
       // Execute command using the pooled connection
       // In a real implementation with a proper RCON client:
       // await connection.send(command);
-      
+
       // For now, we'll use the exec approach as fallback
       const exec = await container.exec({
         Cmd: ['rcon-cli', command],
@@ -444,7 +499,7 @@ async executeRconCommand(serverId: string, command: string): Promise<void> {
         stream.on('end', resolve);
         stream.on('error', reject);
       });
-      
+
       this.logger.log(`RCON command executed: ${command}`);
     } catch (error) {
       if (error.statusCode === 404) {
@@ -460,7 +515,7 @@ async executeRconCommand(serverId: string, command: string): Promise<void> {
   async cleanupRconConnections() {
     const now = Date.now();
     const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-    
+
     for (const [serverId, connection] of this.rconConnections.entries()) {
       if (now - connection.lastUsed > INACTIVITY_TIMEOUT) {
         // Close connection

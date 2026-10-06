@@ -7,12 +7,12 @@ import * as bcrypt from 'bcrypt';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
+
   // Upsert superadmin on bootstrap
   const prisma = app.get(PrismaService);
   const superAdminEmail = process.env.SUPERADMIN_EMAIL;
   const superAdminPassword = process.env.SUPERADMIN_PASSWORD;
-  
+
   if (superAdminEmail && superAdminPassword) {
     // First, make sure we have a default plan
     let defaultPlan = await prisma.plan.findFirst({
@@ -34,7 +34,7 @@ async function bootstrap() {
         },
       });
     }
-    
+
     await prisma.user.upsert({
       where: { email: superAdminEmail },
       update: {
@@ -53,7 +53,7 @@ async function bootstrap() {
     });
     console.log('SuperAdmin upserted successfully');
   }
-  
+
   // Register global interceptor for BigInt conversion
   app.useGlobalInterceptors(new BigIntInterceptor());
 
@@ -63,15 +63,21 @@ async function bootstrap() {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains',
+    );
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(), microphone=(), geolocation=()',
+    );
     res.removeHeader('X-Powered-By');
     next();
   });
-  
-  // CORS configuration — permissive in dev/staging, strict in production
+
+  // CORS configuration — permissive in dev/staging, configurable in production
   const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
-    ? process.env.CORS_ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    ? process.env.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
     : [];
 
   const isProduction = process.env.NODE_ENV === 'production';
@@ -84,8 +90,27 @@ async function bootstrap() {
       // In dev/staging allow all origins
       if (!isProduction) return callback(null, true);
 
-      // Check explicit allowlist from env var
-      if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) {
+      // Allow wildcard in allowlist
+      if (allowedOrigins.includes('*')) {
+        return callback(null, true);
+      }
+
+      // Check explicit allowlist or wildcard domains (*.example.com)
+      if (
+        allowedOrigins.some((allowed) => {
+          if (allowed === origin) return true;
+          if (allowed.startsWith('*.')) {
+            const rootDomain = allowed.slice(2);
+            try {
+              const url = new URL(origin);
+              return url.hostname === rootDomain || url.hostname.endsWith(`.${rootDomain}`);
+            } catch {
+              return false;
+            }
+          }
+          return false;
+        })
+      ) {
         return callback(null, true);
       }
 
@@ -103,18 +128,23 @@ async function bootstrap() {
         return callback(null, true);
       }
 
-      // Block everything else in production
-      return callback(new Error('CORS blocked: Origin not allowed'), false);
+      // Safely disallow without throwing unhandled Error
+      return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: [
+      'Content-Type',
+      'Accept',
+      'Authorization',
+      'X-Requested-With',
+    ],
     maxAge: 86400,
   });
-  
+
   // Add global prefix for all routes
   app.setGlobalPrefix('orchestrator');
-  
+
   const port = process.env.PORT ?? 3002;
   await app.listen(port, '0.0.0.0');
   console.log(`Orchestrator service running on port ${port}`);

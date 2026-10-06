@@ -43,6 +43,8 @@ import {
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import '@xterm/xterm/css/xterm.css';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from '../components/ui/Toast';
 import ShareModal from '../components/ShareModal';
 import { clearSession, getToken, getUser } from '../lib/auth';
 
@@ -427,11 +429,13 @@ function ServerManagementContent() {
       });
       if (res.ok) {
         setServer((prev) => (prev ? { ...prev, status: 'STARTING' } : prev));
+        toast.info('Avvio in corso...', 'Il server sta avviando il container.');
       } else {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.details || d.error || 'Errore avvio server');
       }
     } catch (err: any) {
+      toast.error('Errore avvio', err.message);
       setError(err.message);
     } finally {
       setActionLoading(false);
@@ -448,11 +452,13 @@ function ServerManagementContent() {
       });
       if (res.ok) {
         setServer((prev) => (prev ? { ...prev, status: 'STARTING' } : prev));
+        toast.info('Riavvio in corso...', 'Il container si sta riavviando.');
       } else {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.details || d.error || 'Errore riavvio server');
       }
     } catch (err: any) {
+      toast.error('Errore riavvio', err.message);
       setError(err.message);
     } finally {
       setActionLoading(false);
@@ -469,11 +475,13 @@ function ServerManagementContent() {
       });
       if (res.ok) {
         setServer((prev) => (prev ? { ...prev, status: 'STOPPING' } : prev));
+        toast.warning('Arresto in corso...', 'Il server si sta arrestando.');
       } else {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.message || 'Errore arresto server');
       }
     } catch (err: any) {
+      toast.error('Errore arresto', err.message);
       setError(err.message);
     } finally {
       setActionLoading(false);
@@ -505,13 +513,14 @@ function ServerManagementContent() {
       if (!res.ok) throw new Error(data.error || 'Errore nel salvataggio');
 
       setOriginalProperties(properties);
-      setSaveSuccess(
-        data.writtenToContainer
-          ? 'Proprietà salvate e container riavviato automaticamente.'
-          : 'Proprietà salvate con successo su disco.'
-      );
+      const msg = data.writtenToContainer
+        ? 'Proprietà salvate e container riavviato automaticamente.'
+        : 'Proprietà salvate con successo su disco.';
+      setSaveSuccess(msg);
+      toast.success('Configurazione salvata', msg);
       setTimeout(() => setSaveSuccess(null), 4000);
     } catch (err: any) {
+      toast.error('Errore salvataggio', err.message);
       setError(err.message);
     } finally {
       setSavingProperties(false);
@@ -768,8 +777,8 @@ function ServerManagementContent() {
       )}
 
       {/* Tabs Navigation Header */}
-      <div className="border-b border-zinc-800 bg-zinc-900/40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 sm:gap-2 overflow-x-auto py-2.5">
+      <div className="border-b border-zinc-800 bg-zinc-900/60 sticky top-[57px] z-20 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 sm:gap-2 overflow-x-auto py-2.5 no-scrollbar scroll-smooth">
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 shrink-0 ${
@@ -849,8 +858,17 @@ function ServerManagementContent() {
 
       {/* Tab Contents */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
-        {/* TAB 1: PANORAMICA */}
-        {activeTab === 'overview' && server && (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="w-full"
+          >
+            {/* TAB 1: PANORAMICA */}
+            {activeTab === 'overview' && server && (
           <div className="space-y-6 animate-in fade-in duration-150">
             {/* Server Identity Card */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -1598,6 +1616,8 @@ function ServerManagementContent() {
             </div>
           </div>
         )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Share Modal Dialog */}

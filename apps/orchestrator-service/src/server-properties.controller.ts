@@ -1,13 +1,13 @@
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Body, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
   UseGuards,
   Request,
   BadRequestException,
   ForbiddenException,
-  NotFoundException
+  NotFoundException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ServerPropertiesService } from './server-properties.service';
@@ -31,8 +31,16 @@ export class ServerPropertiesController {
    * - Collaborator with role OPERATOR: 403 Forbidden
    * - Unauthorized users: 403 Forbidden
    */
-  private async checkPropertiesAccess(serverId: string, userId: string, role: string): Promise<void> {
-    if (!serverId || typeof serverId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(serverId)) {
+  private async checkPropertiesAccess(
+    serverId: string,
+    userId: string,
+    role: string,
+  ): Promise<void> {
+    if (
+      !serverId ||
+      typeof serverId !== 'string' ||
+      !/^[a-zA-Z0-9_-]+$/.test(serverId)
+    ) {
       throw new BadRequestException('ID server non valido o mancante');
     }
 
@@ -54,15 +62,24 @@ export class ServerPropertiesController {
     });
 
     if (!collaborator) {
-      throw new ForbiddenException('Accesso negato: non sei autorizzato per questo server');
+      throw new ForbiddenException(
+        'Accesso negato: non sei autorizzato per questo server',
+      );
     }
 
     if (collaborator.role !== CollaboratorRole.MANAGER) {
-      throw new ForbiddenException('Accesso negato: il ruolo OPERATOR non può visualizzare o modificare le proprietà del server');
+      throw new ForbiddenException(
+        'Accesso negato: il ruolo OPERATOR non può visualizzare o modificare le proprietà del server',
+      );
     }
 
-    if (collaborator.user?.plan && !collaborator.user.plan.can_edit_shared_servers) {
-      throw new ForbiddenException('Accesso negato: il tuo piano di abbonamento non consente la gestione di server condivisi');
+    if (
+      collaborator.user?.plan &&
+      !collaborator.user.plan.can_edit_shared_servers
+    ) {
+      throw new ForbiddenException(
+        'Accesso negato: il tuo piano di abbonamento non consente la gestione di server condivisi',
+      );
     }
   }
 
@@ -72,7 +89,7 @@ export class ServerPropertiesController {
     if (!serverId || typeof serverId !== 'string') {
       throw new BadRequestException('serverId query parameter is required');
     }
-    
+
     const { userId, role } = req.user;
     await this.checkPropertiesAccess(serverId, userId, role);
 
@@ -81,8 +98,8 @@ export class ServerPropertiesController {
 
   @Post()
   async updateProperties(
-    @Body() body: { serverId: string, properties: Record<string, any> },
-    @Request() req
+    @Body() body: { serverId: string; properties: Record<string, any> },
+    @Request() req,
   ) {
     if (!body.serverId) {
       throw new BadRequestException('serverId is required');
@@ -93,13 +110,13 @@ export class ServerPropertiesController {
 
     const { userId, role } = req.user;
     await this.checkPropertiesAccess(body.serverId, userId, role);
-    
+
     const result = await this.serverPropertiesService.updateServerProperties(
       body.serverId,
       body.properties,
-      userId
+      userId,
     );
     this.consoleGateway.broadcastServerSettings(body.serverId);
     return result;
   }
-}
+}

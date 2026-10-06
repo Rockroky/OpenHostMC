@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Server,
   Play,
@@ -28,9 +29,13 @@ import {
   HardDrive,
   Activity,
   X,
+  Menu,
 } from 'lucide-react';
 import ShareModal from '../components/ShareModal';
 import { clearSession, getToken, getUser } from '../lib/auth';
+import { StaggerContainer, StaggerItem, SkeletonCard } from '../components/ui/animations';
+import { toast } from '../components/ui/Toast';
+
 
 interface McServer {
   id: string;
@@ -83,6 +88,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [filter, setFilter] = useState<'ALL' | 'OWNED' | 'SHARED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Share Modal State
   const [shareServer, setShareServer] = useState<McServer | null>(null);
@@ -170,6 +176,7 @@ export default function DashboardPage() {
         setServers((prev) =>
           prev.map((s) => (s.id === serverId ? { ...s, status: 'STARTING' } : s))
         );
+        toast.info('Server in avvio...', 'Il server sta partendo, attendere qualche secondo.');
         const interval = setInterval(async () => {
           await updateServerStatus(serverId);
           const current = servers.find((s) => s.id === serverId);
@@ -181,6 +188,7 @@ export default function DashboardPage() {
         throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`);
       }
     } catch (err: any) {
+      toast.error('Errore avvio', err.message);
       setError(`Errore nell'avvio del server: ${err.message}`);
       await updateServerStatus(serverId);
     } finally {
@@ -205,6 +213,7 @@ export default function DashboardPage() {
         setServers((prev) =>
           prev.map((s) => (s.id === serverId ? { ...s, status: 'STARTING' } : s))
         );
+        toast.info('Riavvio in corso...', 'Il server si sta riavviando.');
         const interval = setInterval(async () => {
           await updateServerStatus(serverId);
           const current = servers.find((s) => s.id === serverId);
@@ -216,6 +225,7 @@ export default function DashboardPage() {
         throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`);
       }
     } catch (err: any) {
+      toast.error('Errore riavvio', err.message);
       setError(`Errore nel riavvio del server: ${err.message}`);
       await updateServerStatus(serverId);
     } finally {
@@ -240,6 +250,7 @@ export default function DashboardPage() {
         setServers((prev) =>
           prev.map((s) => (s.id === serverId ? { ...s, status: 'STOPPING' } : s))
         );
+        toast.warning('Arresto in corso...', 'Il server si sta spegnendo.');
         const interval = setInterval(async () => {
           await updateServerStatus(serverId);
           const current = servers.find((s) => s.id === serverId);
@@ -251,6 +262,7 @@ export default function DashboardPage() {
         throw new Error(errorData.message || `HTTP ${response.status}`);
       }
     } catch (err: any) {
+      toast.error('Errore arresto', err.message);
       setError(`Errore nello stop del server: ${err.message}`);
       await updateServerStatus(serverId);
     } finally {
@@ -273,11 +285,13 @@ export default function DashboardPage() {
 
       if (response.ok) {
         setServers((prev) => prev.filter((s) => s.id !== serverId));
+        toast.success('Server eliminato', 'Il server è stato eliminato correttamente.');
       } else {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `HTTP ${response.status}`);
       }
     } catch (err: any) {
+      toast.error('Errore eliminazione', err.message);
       setError(`Errore nell'eliminazione del server: ${err.message}`);
     } finally {
       setActionLoading(null);
@@ -447,11 +461,29 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin mx-auto" />
-          <p className="text-sm text-zinc-400">Caricamento dei server in corso...</p>
-        </div>
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+        <header className="bg-zinc-900/80 border-b border-zinc-800 sticky top-0 z-30 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                <Server className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="font-bold text-base tracking-tight text-white block leading-none">
+                  OpenHost<span className="text-emerald-400">MC</span>
+                </span>
+                <span className="text-[10px] text-zinc-500 font-mono">Control Panel</span>
+              </div>
+            </div>
+          </div>
+        </header>
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        </main>
       </div>
     );
   }
@@ -475,7 +507,8 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          {/* Desktop action buttons */}
+          <div className="hidden sm:flex items-center gap-2.5">
             {user?.role === 'SUPERADMIN' && (
               <Link
                 href="/admin"
@@ -492,7 +525,7 @@ export default function DashboardPage() {
               title="Aggiorna lista"
             >
               <RotateCw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Aggiorna</span>
+              <span>Aggiorna</span>
             </button>
 
             <Link
@@ -509,10 +542,69 @@ export default function DashboardPage() {
               title="Disconnetti"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Esci</span>
+              <span>Esci</span>
+            </button>
+          </div>
+
+          {/* Mobile action bar */}
+          <div className="flex sm:hidden items-center gap-2">
+            <Link
+              href="/server/new"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nuovo</span>
+            </Link>
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-1.5 text-zinc-400 hover:text-white bg-zinc-800/80 rounded-lg border border-zinc-700/60"
+              aria-label="Menu"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
+
+        {/* Mobile Dropdown */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="sm:hidden border-t border-zinc-800 bg-zinc-900/95 backdrop-blur-md px-4 py-3 space-y-2 overflow-hidden"
+            >
+              {user?.role === 'SUPERADMIN' && (
+                <Link
+                  href="/admin"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full bg-purple-900/30 text-purple-300 border border-purple-700/50 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2"
+                >
+                  <ShieldCheck className="w-4 h-4 text-purple-400" />
+                  <span>Pannello Superadmin</span>
+                </Link>
+              )}
+              <button
+                onClick={() => {
+                  fetchServers();
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full text-left bg-zinc-800/80 text-zinc-300 px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 border border-zinc-700/50"
+              >
+                <RotateCw className="w-4 h-4 text-emerald-400" />
+                <span>Aggiorna Server</span>
+              </button>
+              <button
+                onClick={handleLogout}
+                className="w-full text-left bg-zinc-800/80 text-red-400 hover:bg-red-500/10 px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 border border-zinc-700/50"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Disconnetti ({user?.username || 'Account'})</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* Main Content Area */}
@@ -663,7 +755,7 @@ export default function DashboardPage() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5" staggerDelay={0.06}>
             {filteredServers.map((server) => {
               const role = getUserRole(server);
               const isOwner = role === 'OWNER';
@@ -683,9 +775,11 @@ export default function DashboardPage() {
               const cpuCores = server.allocated_cpu_cores || server.plan?.cpu_cores || 1.0;
 
               return (
-                <div
-                  key={server.id}
-                  className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 rounded-2xl transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-lg shadow-black/20"
+                <StaggerItem key={server.id}>
+                <motion.div
+                  whileHover={{ y: -2, boxShadow: '0 12px 40px rgba(0,0,0,0.35)' }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 rounded-2xl transition-colors flex flex-col justify-between overflow-hidden shadow-lg shadow-black/20"
                 >
                   <div className="p-5 sm:p-6 space-y-5">
                     {/* Server Header */}
@@ -769,13 +863,13 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Actions Footer */}
-                  <div className="bg-zinc-950/70 border-t border-zinc-800/80 p-3 sm:px-6 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                  <div className="bg-zinc-950/70 border-t border-zinc-800/80 p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
                       {/* Avvia Button */}
                       <button
                         onClick={() => handleStartServer(server.id)}
                         disabled={isBusy || isRunning || isStarting}
-                        className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+                        className="flex-1 py-2 px-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
                         title="Avvia il server"
                       >
                         {isBusy && actionType === 'start' ? (
@@ -790,7 +884,7 @@ export default function DashboardPage() {
                       <button
                         onClick={() => handleRestartServer(server.id)}
                         disabled={isBusy || isStopped}
-                        className="py-2 px-3 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800/50 disabled:text-zinc-600 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center justify-center gap-1.5"
+                        className="flex-1 py-2 px-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800/50 disabled:text-zinc-600 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center justify-center gap-1.5"
                         title="Riavvia il server"
                       >
                         {isBusy && actionType === 'restart' ? (
@@ -805,7 +899,7 @@ export default function DashboardPage() {
                       <button
                         onClick={() => handleStopServer(server.id)}
                         disabled={isBusy || isStopped || isStopping}
-                        className="py-2 px-3 bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 disabled:bg-zinc-800/50 disabled:text-zinc-600 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center justify-center gap-1.5"
+                        className="py-2 px-2.5 bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 disabled:bg-zinc-800/50 disabled:text-zinc-600 text-zinc-200 rounded-lg text-xs font-semibold transition-colors border border-zinc-700 flex items-center justify-center gap-1.5"
                         title="Arresta il server"
                       >
                         {isBusy && actionType === 'stop' ? (
@@ -813,11 +907,11 @@ export default function DashboardPage() {
                         ) : (
                           <Square className="w-3.5 h-3.5 fill-current text-red-400" />
                         )}
-                        <span className="hidden sm:inline">Arresta</span>
+                        <span>Arresta</span>
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center justify-end gap-1.5 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-800/60">
                       {/* Share Button (opens modal) */}
                       <button
                         onClick={() => setShareServer(server)}
@@ -834,7 +928,7 @@ export default function DashboardPage() {
                         title="Apri Console RCON"
                       >
                         <Terminal className="w-3.5 h-3.5 text-zinc-400" />
-                        <span className="hidden md:inline">Console</span>
+                        <span className="hidden xl:inline">Console</span>
                       </Link>
 
                       {/* Manage Server Link */}
@@ -860,10 +954,11 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                </motion.div>
+              </StaggerItem>
+            );
+          })}
+        </StaggerContainer>
         )}
       </main>
 

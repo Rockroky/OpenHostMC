@@ -16,7 +16,13 @@ import { RolesGuard } from './roles.guard';
       signOptions: { expiresIn: '7d' },
     }),
   ],
-  providers: [AuthService, JwtStrategy, LocalStrategy, RolesGuard, PrismaService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    LocalStrategy,
+    RolesGuard,
+    PrismaService,
+  ],
   exports: [AuthService, JwtModule, RolesGuard],
 })
 export class AuthModule {}

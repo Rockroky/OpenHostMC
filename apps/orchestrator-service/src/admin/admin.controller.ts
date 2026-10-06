@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Query, Logger, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+  Logger,
+  Req,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PrismaService } from '../prisma.service';
 import { DockerService } from '../docker.service';
@@ -18,9 +30,11 @@ export class AdminController {
   private serializeServer(server: any) {
     return {
       ...server,
-      total_uptime_seconds: server.total_uptime_seconds !== null && server.total_uptime_seconds !== undefined
-        ? server.total_uptime_seconds.toString()
-        : "0",
+      total_uptime_seconds:
+        server.total_uptime_seconds !== null &&
+        server.total_uptime_seconds !== undefined
+          ? server.total_uptime_seconds.toString()
+          : '0',
       created_at: server.created_at?.toISOString(),
       updated_at: server.updated_at?.toISOString(),
       last_started_at: server.last_started_at?.toISOString() || null,
@@ -92,21 +106,29 @@ export class AdminController {
   @Patch('users/:id')
   async updateUser(
     @Param('id') id: string,
-    @Body() body: { username?: string; role?: string; verified?: boolean; plan_id?: string | null },
+    @Body()
+    body: {
+      username?: string;
+      role?: string;
+      verified?: boolean;
+      plan_id?: string | null;
+    },
     @Req() req: any,
   ) {
     try {
       if (req.user.userId === id && body.role !== undefined) {
-        throw new Error('Non puoi modificare i permessi del tuo stesso account.');
+        throw new Error(
+          'Non puoi modificare i permessi del tuo stesso account.',
+        );
       }
       if (body.plan_id === null) {
         throw new Error('Un utente deve obbligatoriamente avere un piano.');
       }
 
       const updateData: any = { ...body };
-      
+
       // Remove undefined values
-      Object.keys(updateData).forEach(key => {
+      Object.keys(updateData).forEach((key) => {
         if (updateData[key] === undefined) {
           delete updateData[key];
         }
@@ -133,14 +155,17 @@ export class AdminController {
       this.prisma.mcServer.count(),
       this.prisma.mcServer.count({ where: { status: 'RUNNING' } }),
     ]);
-    
+
     // Calculate total RAM used by running servers
     const runningServers = await this.prisma.mcServer.findMany({
       where: { status: 'RUNNING' },
-      include: { plan: true }
+      include: { plan: true },
     });
-    
-    const totalRamUsed = runningServers.reduce((acc, s) => acc + s.plan.ram_mb, 0);
+
+    const totalRamUsed = runningServers.reduce(
+      (acc, s) => acc + s.plan.ram_mb,
+      0,
+    );
 
     return {
       totalUsers,
@@ -181,18 +206,21 @@ export class AdminController {
   }
 
   @Post('plans')
-  async createPlan(@Body() body: {
-    name: string;
-    max_servers: number;
-    ram_mb: number;
-    cpu_cores: number;
-    storage_gb: number;
-    max_players: number;
-    daily_uptime_hours: number;
-    backup_max_stored: number;
-    backup_frequency_hours: number;
-    queue_enabled: boolean;
-  }) {
+  async createPlan(
+    @Body()
+    body: {
+      name: string;
+      max_servers: number;
+      ram_mb: number;
+      cpu_cores: number;
+      storage_gb: number;
+      max_players: number;
+      daily_uptime_hours: number;
+      backup_max_stored: number;
+      backup_frequency_hours: number;
+      queue_enabled: boolean;
+    },
+  ) {
     try {
       const plan = await this.prisma.plan.create({ data: body });
       return { success: true, plan };
@@ -205,7 +233,8 @@ export class AdminController {
   @Patch('plans/:id')
   async updatePlan(
     @Param('id') id: string,
-    @Body() body: Partial<{
+    @Body()
+    body: Partial<{
       name: string;
       max_servers: number;
       ram_mb: number;
@@ -236,11 +265,15 @@ export class AdminController {
       const planToDelete = await this.prisma.plan.findUnique({ where: { id } });
       if (!planToDelete) throw new Error('Piano non trovato');
       if (planToDelete.name === 'Free' || planToDelete.name === 'SuperAdmin') {
-        throw new Error('Impossibile eliminare i piani di sistema (Free e SuperAdmin).');
+        throw new Error(
+          'Impossibile eliminare i piani di sistema (Free e SuperAdmin).',
+        );
       }
 
       // Trova il piano "Free" per fare il fallback
-      const freePlan = await this.prisma.plan.findFirst({ where: { name: 'Free' } });
+      const freePlan = await this.prisma.plan.findFirst({
+        where: { name: 'Free' },
+      });
       if (!freePlan) throw new Error('Piano Free non trovato per il fallback.');
 
       // Sposta tutti gli utenti collegati al piano da eliminare verso il piano Free
@@ -251,8 +284,12 @@ export class AdminController {
 
       // Elimina il piano
       await this.prisma.plan.delete({ where: { id } });
-      
-      return { success: true, message: 'Piano eliminato con successo. Gli utenti affetti sono stati spostati sul piano Free.' };
+
+      return {
+        success: true,
+        message:
+          'Piano eliminato con successo. Gli utenti affetti sono stati spostati sul piano Free.',
+      };
     } catch (error: any) {
       this.logger.error('Error deleting plan:', error);
       return { error: 'Failed to delete plan', details: error.message };
@@ -274,14 +311,17 @@ export class AdminController {
       this.prisma.mcServer.findMany({
         skip,
         take: limitNum,
-        include: { owner: { select: { id: true, username: true, email: true } }, plan: true },
+        include: {
+          owner: { select: { id: true, username: true, email: true } },
+          plan: true,
+        },
         orderBy: { created_at: 'desc' },
       }),
       this.prisma.mcServer.count(),
     ]);
 
     return {
-      servers: servers.map(s => this.serializeServer(s)),
+      servers: servers.map((s) => this.serializeServer(s)),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -329,10 +369,14 @@ export class AdminController {
       this.prisma.mcServer.count({ where: { status: 'RUNNING' } }),
       this.prisma.mcServer.count({ where: { status: 'STOPPED' } }),
       this.prisma.user.count({
-        where: { created_at: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+        where: {
+          created_at: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        },
       }),
       this.prisma.mcServer.count({
-        where: { created_at: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+        where: {
+          created_at: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        },
       }),
     ]);
 

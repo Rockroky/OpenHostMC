@@ -35,10 +35,11 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    const orchestratorUrl = (process.env.ORCHESTRATOR_INTERNAL_URL || process.env.API_URL || 'http://localhost:3002').replace(/\/$/, '');
     return [
       {
         source: '/api/orchestrator/:path*',
-        destination: 'http://localhost:3002/orchestrator/:path*',
+        destination: `${orchestratorUrl}/orchestrator/:path*`,
       },
       {
         source: '/api/servers/:path*',

@@ -166,6 +166,198 @@ const API_BASE = '/api/orchestrator';
 
 type ActiveTab = 'overview' | 'console' | 'config' | 'players' | 'files' | 'share';
 
+function ServerConsoleTab({ serverId }: { serverId: string }) {
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const term = useRef<any>(null);
+  const fitAddon = useRef<any>(null);
+  const socket = useRef<Socket | null>(null);
+  const [command, setCommand] = useState('');
+  const [stats, setStats] = useState({ cpu: 0, ram: 0 });
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    let isDisposed = false;
+    let resizeObserver: ResizeObserver | null = null;
+    let timer1: any = null;
+    let timer2: any = null;
+    let handleWindowResize: (() => void) | null = null;
+
+    Promise.all([
+      import('@xterm/xterm'),
+      import('@xterm/addon-fit')
+    ]).then(([{ Terminal }, { FitAddon }]) => {
+      if (isDisposed || !terminalRef.current) return;
+
+      terminalRef.current.innerHTML = '';
+
+      const terminal = new Terminal({
+        theme: {
+          background: '#09090b',
+          foreground: '#e4e4e7',
+          cursor: '#10b981',
+          selectionBackground: '#10b98133',
+        },
+        fontFamily: 'monospace',
+        fontSize: 13,
+        convertEol: true,
+        cursorBlink: true,
+      });
+      term.current = terminal;
+
+      const fit = new FitAddon();
+      fitAddon.current = fit;
+      terminal.loadAddon(fit);
+      terminal.open(terminalRef.current);
+
+      const doFit = () => {
+        try {
+          fit.fit();
+        } catch {}
+      };
+
+      handleWindowResize = doFit;
+      window.addEventListener('resize', doFit);
+
+      doFit();
+      timer1 = setTimeout(doFit, 100);
+      timer2 = setTimeout(doFit, 350);
+
+      const host = window.location.hostname;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const s = io(`${protocol}//${host}:3005/console`, {
+        transports: ['websocket'],
+      });
+      socket.current = s;
+
+      const token = localStorage.getItem('token');
+
+      s.on('connect', () => {
+        setIsConnected(true);
+        terminal.writeln('\x1b[32m[OpenHostMC] Connesso al WebSocket del server.\x1b[0m');
+        s.emit('join-console', { serverId, token });
+      });
+
+      s.on('console-log', (data: string) => {
+        terminal.write(data);
+      });
+
+      s.on('console-error', (err: string) => {
+        terminal.writeln(`\x1b[31m[Errore Console] ${err}\x1b[0m`);
+      });
+
+      s.on('stats', (data: { cpu: number; ram: number }) => {
+        setStats(data);
+      });
+
+      s.on('disconnect', () => {
+        setIsConnected(false);
+        terminal.writeln('\x1b[31m[OpenHostMC] Disconnesso dal WebSocket.\x1b[0m');
+      });
+
+      if (terminalRef.current && typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => doFit());
+        resizeObserver.observe(terminalRef.current);
+      }
+    });
+
+    return () => {
+      isDisposed = true;
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      if (handleWindowResize) {
+        window.removeEventListener('resize', handleWindowResize);
+      }
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+      if (socket.current) {
+        socket.current.disconnect();
+        socket.current = null;
+      }
+      if (term.current) {
+        term.current.dispose();
+        term.current = null;
+      }
+    };
+  }, [serverId]);
+
+  const handleSendCommand = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!command.trim() || !socket.current || !serverId) return;
+    const token = localStorage.getItem('token');
+    socket.current.emit('send-command', { serverId, command: command.trim(), token });
+    term.current?.writeln(`\x1b[36m> ${command.trim()}\x1b[0m`);
+    setCommand('');
+  };
+
+  return (
+    <div className="space-y-3 sm:space-y-4 animate-in fade-in duration-150">
+      {/* Console Toolbar */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+            <Terminal className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-bold text-sm text-white">Console WebSocket & RCON</h3>
+            <div className="flex items-center gap-2 text-xs text-zinc-400">
+              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+              <span>{isConnected ? 'Connesso' : 'Disconnesso'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Resource stats and link to dedicated page */}
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="grid grid-cols-2 gap-2 flex-1 sm:flex-initial sm:flex sm:items-center sm:gap-3 text-xs">
+            <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center">
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">CPU</span>
+              <span className="font-mono font-bold text-blue-400">{stats.cpu}%</span>
+            </div>
+            <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center">
+              <span className="text-zinc-500 block text-[10px] uppercase font-semibold">RAM</span>
+              <span className="font-mono font-bold text-emerald-400">{stats.ram} MB</span>
+            </div>
+          </div>
+          <Link
+            href={`/console?serverId=${serverId}`}
+            target="_blank"
+            className="p-2 sm:px-3 sm:py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg sm:rounded-xl text-xs font-semibold transition-colors border border-zinc-700 flex items-center gap-1.5 shrink-0"
+            title="Apri console a schermo intero in una nuova scheda"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="hidden sm:inline">Schermo intero</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Terminal View */}
+      <div className="bg-zinc-950 rounded-xl sm:rounded-2xl border border-zinc-800 overflow-hidden shadow-2xl relative h-[320px] xs:h-[380px] sm:h-[460px] md:h-[520px]">
+        <div ref={terminalRef} className="absolute inset-0 p-3" />
+      </div>
+
+      {/* Command input form */}
+      <form onSubmit={handleSendCommand} className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="text"
+          value={command}
+          onChange={(e) => setCommand(e.target.value)}
+          placeholder="Inserisci un comando Minecraft (es. help, list, op Steve, say Buongiorno)..."
+          className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 sm:py-3 outline-none focus:border-blue-500 text-xs font-mono text-zinc-100 placeholder-zinc-500 transition-colors"
+        />
+        <button
+          type="submit"
+          disabled={!command.trim()}
+          className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+        >
+          <span>Invia</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function ServerManagementContent() {
   const searchParams = useSearchParams();
   const serverId = searchParams?.get('serverId') || searchParams?.get('id') || '';
@@ -207,14 +399,7 @@ function ServerManagementContent() {
   // Share Modal State
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-  // Live Console & Stats WebSocket state
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const term = useRef<any>(null);
-  const fitAddon = useRef<any>(null);
-  const consoleSocket = useRef<Socket | null>(null);
-  const [command, setCommand] = useState('');
-  const [stats, setStats] = useState({ cpu: 0, ram: 0 });
-  const [isConsoleConnected, setIsConsoleConnected] = useState(false);
+
 
   // Load user from session
   useEffect(() => {
@@ -330,132 +515,7 @@ function ServerManagementContent() {
   const isOperator = userRole === 'OPERATOR';
   const isManagerOrOwner = userRole === 'MANAGER' || userRole === 'OWNER';
 
-  // Live Console setup when activeTab === 'console'
-  useEffect(() => {
-    if (activeTab !== 'console' || !serverId || loading) {
-      if (consoleSocket.current) {
-        consoleSocket.current.disconnect();
-        consoleSocket.current = null;
-      }
-      if (term.current) {
-        term.current.dispose();
-        term.current = null;
-      }
-      setIsConsoleConnected(false);
-      return;
-    }
 
-    let isDisposed = false;
-
-    // Piccolo timeout per assicurarsi che il container DOM sia montato e visibile
-    const initTimer = setTimeout(() => {
-      Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]).then(
-        ([{ Terminal }, { FitAddon }]) => {
-          if (isDisposed || !terminalRef.current) return;
-
-          // Pulisce il nodo DOM per evitare duplicazioni del terminale xterm
-          terminalRef.current.innerHTML = '';
-
-          const terminal = new Terminal({
-            theme: {
-              background: '#09090b',
-              foreground: '#e4e4e7',
-              cursor: '#10b981',
-              selectionBackground: '#10b98133',
-            },
-            fontFamily: 'monospace',
-            fontSize: 13,
-            convertEol: true,
-            cursorBlink: true,
-          });
-          term.current = terminal;
-
-          const fit = new FitAddon();
-          fitAddon.current = fit;
-          terminal.loadAddon(fit);
-          terminal.open(terminalRef.current);
-
-          try {
-            fit.fit();
-          } catch {}
-
-          const host = window.location.hostname;
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const socket = io(`${protocol}//${host}:3005/console`, {
-            transports: ['websocket'],
-          });
-          consoleSocket.current = socket;
-
-          const token = localStorage.getItem('token');
-
-          socket.on('connect', () => {
-            setIsConsoleConnected(true);
-            terminal.writeln('\x1b[32m[OpenHostMC] Connesso al WebSocket del server.\x1b[0m');
-            socket.emit('join-console', { serverId, token });
-          });
-
-          socket.on('console-log', (data: string) => {
-            terminal.write(data);
-          });
-
-          socket.on('console-error', (err: string) => {
-            terminal.writeln(`\x1b[31m[Errore Console] ${err}\x1b[0m`);
-          });
-
-          socket.on('stats', (data: { cpu: number; ram: number }) => {
-            setStats(data);
-          });
-
-          socket.on('disconnect', () => {
-            setIsConsoleConnected(false);
-            terminal.writeln('\x1b[31m[OpenHostMC] Disconnesso dal WebSocket.\x1b[0m');
-          });
-
-          const handleResize = () => {
-            try {
-              fit.fit();
-            } catch {}
-          };
-          window.addEventListener('resize', handleResize);
-
-          let resizeObserver: ResizeObserver | null = null;
-          if (terminalRef.current && typeof ResizeObserver !== 'undefined') {
-            resizeObserver = new ResizeObserver(() => handleResize());
-            resizeObserver.observe(terminalRef.current);
-          }
-
-          setTimeout(handleResize, 150);
-          setTimeout(handleResize, 400);
-        }
-      );
-    }, 50);
-
-    return () => {
-      isDisposed = true;
-      clearTimeout(initTimer);
-      try {
-        fitAddon.current?.fit();
-      } catch {}
-      if (consoleSocket.current) {
-        consoleSocket.current.disconnect();
-        consoleSocket.current = null;
-      }
-      if (term.current) {
-        term.current.dispose();
-        term.current = null;
-      }
-      setIsConsoleConnected(false);
-    };
-  }, [activeTab, serverId, loading]);
-
-  const handleSendCommand = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!command.trim() || !consoleSocket.current || !serverId) return;
-    const token = localStorage.getItem('token');
-    consoleSocket.current.emit('send-command', { serverId, command: command.trim(), token });
-    term.current?.writeln(`\x1b[36m> ${command.trim()}\x1b[0m`);
-    setCommand('');
-  };
 
   // Start / Restart / Stop Handlers
   const handleStart = async () => {
@@ -1066,64 +1126,7 @@ function ServerManagementContent() {
 
         {/* TAB 2: CONSOLE LIVE */}
         {activeTab === 'console' && (
-          <div className="space-y-3 sm:space-y-4 animate-in fade-in duration-150">
-            {/* Console Toolbar */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-                  <Terminal className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-white">Console WebSocket & RCON</h3>
-                  <div className="flex items-center gap-2 text-xs text-zinc-400">
-                    <span className={`w-2 h-2 rounded-full ${isConsoleConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-                    <span>{isConsoleConnected ? 'Connesso' : 'Disconnesso'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Resource stats from socket */}
-              <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-3 text-xs">
-                <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center flex-1 sm:flex-initial">
-                  <span className="text-zinc-500 block text-[10px] uppercase font-semibold">CPU Container</span>
-                  <span className="font-mono font-bold text-blue-400">{stats.cpu}%</span>
-                </div>
-                <div className="bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-center flex-1 sm:flex-initial">
-                  <span className="text-zinc-500 block text-[10px] uppercase font-semibold">RAM Utilizzata</span>
-                  <span className="font-mono font-bold text-emerald-400">{stats.ram} MB</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Terminal View */}
-            <div className="bg-zinc-950 rounded-xl sm:rounded-2xl border border-zinc-800 overflow-hidden shadow-2xl relative h-[320px] xs:h-[380px] sm:h-[460px] md:h-[520px]">
-              <div ref={terminalRef} className="absolute inset-0 p-3" />
-            </div>
-
-            {/* Command input form */}
-            <form onSubmit={handleSendCommand} className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-                placeholder={
-                  !isConsoleConnected
-                    ? 'In attesa di connessione alla console del server...'
-                    : 'Inserisci un comando Minecraft (es. help, list, op Steve, say Buongiorno)...'
-                }
-                disabled={!isConsoleConnected}
-                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 sm:py-3 outline-none focus:border-blue-500 text-xs font-mono text-zinc-100 placeholder-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-              <button
-                type="submit"
-                disabled={!command.trim() || !isConsoleConnected}
-                className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-              >
-                <span>Invia</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
+          <ServerConsoleTab serverId={serverId} />
         )}
 
         {/* TAB 3: CONFIGURAZIONE (server.properties) */}
